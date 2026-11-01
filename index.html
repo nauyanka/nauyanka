@@ -25,16 +25,6 @@
       </div>
     </label>
 
-    <label class="field">
-      <span>Zorluk</span>
-      <select id="difficulty">
-        <option value="easy">Kolay</option>
-        <option value="medium" selected>Orta</option>
-        <option value="hard">Zor</option>
-        <option value="insane">Çılgın</option>
-      </select>
-    </label>
-
     <button id="btn-bet" class="btn primary">BAHİS YAP</button>
     <button id="btn-step" class="btn step" disabled>ADIM AT</button>
     <button id="btn-cashout" class="btn cashout" disabled>CASH OUT <span id="cashout-amount"></span></button>
@@ -42,8 +32,9 @@
     <div class="stats">
       <div><span>Mevcut Çarpan</span><strong id="cur-mult">1.00×</strong></div>
       <div><span>Sonraki</span><strong id="next-mult">—</strong></div>
-      <div><span>Sonraki Adım Şansı</span><strong id="next-chance">—</strong></div>
+      <div><span>Geçiş Şansı</span><strong id="next-chance">—</strong></div>
     </div>
+    <div class="track-preview" id="track-preview"></div>
 
     <details class="fair">
       <summary>Provably Fair</summary>
@@ -51,7 +42,7 @@
       <div class="fair-row"><span>Client Seed</span><input id="client-seed" type="text" value="plank-walker"></div>
       <div class="fair-row"><span>Nonce</span><code id="nonce">0</code></div>
       <div class="fair-row"><span>Son Server Seed</span><code id="revealed-seed">—</code></div>
-      <p>Kasa avantajı %4 (RTP %96). Hangi segmentte cash out yaparsan yap beklenen getiri aynıdır.</p>
+      <p>Her turun parkuru (kalas sayısı, çarpanlar, yükseklikler) ve adım zarları aynı seed'den üretilir. Kasa avantajı %4 (RTP %96). Hangi kalasta cash out yaparsan yap beklenen getiri aynıdır.</p>
     </details>
 
     <div class="history" id="history"></div>

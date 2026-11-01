@@ -4,7 +4,8 @@
   "description": "Stake tarzı kalas yürüyüşü crash oyunu",
   "scripts": {
     "start": "npx -y serve -l 3000 .",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "build": "node scripts/build.js"
   },
   "license": "MIT"
 }
