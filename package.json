@@ -1,0 +1,10 @@
+{
+  "name": "plank-walker",
+  "version": "1.0.0",
+  "description": "Stake tarzı kalas yürüyüşü crash oyunu",
+  "scripts": {
+    "start": "npx -y serve -l 3000 .",
+    "test": "node --test test/*.test.js"
+  },
+  "license": "MIT"
+}

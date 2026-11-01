@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plank Walker</title>
+<link rel="stylesheet" href="src/style.css">
+</head>
+<body>
+<div class="app">
+  <aside class="panel">
+    <div class="brand">PLANK<span>WALKER</span></div>
+
+    <div class="balance">
+      <span>Bakiye</span>
+      <strong id="balance">$1,000.00</strong>
+    </div>
+
+    <label class="field">
+      <span>Bahis Miktarı</span>
+      <div class="input-row">
+        <input id="bet" type="number" min="0.1" step="0.1" value="10">
+        <button data-bet="half">½</button>
+        <button data-bet="double">2×</button>
+      </div>
+    </label>
+
+    <label class="field">
+      <span>Zorluk</span>
+      <select id="difficulty">
+        <option value="easy">Kolay</option>
+        <option value="medium" selected>Orta</option>
+        <option value="hard">Zor</option>
+        <option value="insane">Çılgın</option>
+      </select>
+    </label>
+
+    <button id="btn-bet" class="btn primary">BAHİS YAP</button>
+    <button id="btn-step" class="btn step" disabled>ADIM AT</button>
+    <button id="btn-cashout" class="btn cashout" disabled>CASH OUT <span id="cashout-amount"></span></button>
+
+    <div class="stats">
+      <div><span>Mevcut Çarpan</span><strong id="cur-mult">1.00×</strong></div>
+      <div><span>Sonraki</span><strong id="next-mult">—</strong></div>
+      <div><span>Sonraki Adım Şansı</span><strong id="next-chance">—</strong></div>
+    </div>
+
+    <details class="fair">
+      <summary>Provably Fair</summary>
+      <div class="fair-row"><span>Server Seed Hash</span><code id="seed-hash">—</code></div>
+      <div class="fair-row"><span>Client Seed</span><input id="client-seed" type="text" value="plank-walker"></div>
+      <div class="fair-row"><span>Nonce</span><code id="nonce">0</code></div>
+      <div class="fair-row"><span>Son Server Seed</span><code id="revealed-seed">—</code></div>
+      <p>Kasa avantajı %4 (RTP %96). Hangi segmentte cash out yaparsan yap beklenen getiri aynıdır.</p>
+    </details>
+
+    <div class="history" id="history"></div>
+  </aside>
+
+  <main class="stage">
+    <canvas id="game"></canvas>
+    <div id="toast" class="toast"></div>
+  </main>
+</div>
+
+<script src="src/engine.js"></script>
+<script src="src/game.js"></script>
+</body>
+</html>
