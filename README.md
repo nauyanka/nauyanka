@@ -20,7 +20,7 @@ Ya da `index.html` dosyasını doğrudan tarayıcıda aç.
 
 ## Mekanik
 
-- Her tur **rastgele parkur**: 8–14 kalas, çarpanlar küçükten büyüğe (1.2× … 10000×). Çarpanlar **gizlidir**; her kalasın üstünde "?" madalyonu durur.
+- Her tur **rastgele parkur**: 10–16 kalas, çarpanlar küçükten büyüğe yavaş yavaş artar (tipik olarak 5. kalasta ~4×, sonda ~50×, nadiren 1000×+). Çarpanlar **gizlidir**; her kalasın üstünde "?" madalyonu durur.
 - Adam kalasta normal yürür. Kalasa basınca gökten **şimşek** çakar ve çarpan sürpriz olarak kanatlı madalyon halinde düşer. Çarpan büyüdükçe madalyonun rengi değişir: yeşil → mavi → mor → ateş → altın → elmas (100×+).
 - Şimşek bazen kötü haber getirir: adam kayar ya da kalas kırılır, bahis gider.
 - Kasa avantajı %4 → **RTP %96**. i. kalasa ulaşma olasılığı `0.96 / çarpan(i)` olduğu için hangi noktada cash out yaparsan yap beklenen getiri sabittir. Büyük çarpan sıçraması = düşük geçiş şansı.

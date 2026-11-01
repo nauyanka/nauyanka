@@ -10,10 +10,10 @@
  */
 
 const HOUSE_EDGE = 0.04;
-const TRACK_ROLLS = 32;   // parkur üretimi için ayrılan zar sayısı
-const MAX_SEGMENTS = 14;
-const MIN_SEGMENTS = 8;
-const MAX_MULTIPLIER = 10000;
+const TRACK_ROLLS = 40;   // parkur üretimi için ayrılan zar sayısı
+const MAX_SEGMENTS = 16;
+const MIN_SEGMENTS = 10;
+const MAX_MULTIPLIER = 5000;
 
 const round2 = (n) => Math.round(n * 100) / 100;
 
@@ -30,12 +30,13 @@ function generateTrack(rolls) {
 
   for (let i = 0; i < count; i++) {
     const r = rolls[1 + i * 2], g = rolls[2 + i * 2];
-    // Çarpan büyüme çarpanı: çoğunlukla küçük, ara sıra büyük sıçrama
+    // Çarpan büyüme çarpanı: çoğunlukla küçük adımlar, ara sıra sıçrama.
+    // Büyüme hızı = düşme riski; yavaş büyüme uzun ve gerilimli turlar demek.
     let growth;
-    if (r < 0.55) growth = 1.18 + g * 0.5;        // 1.18–1.68
-    else if (r < 0.85) growth = 1.7 + g * 1.3;    // 1.7–3.0
-    else if (r < 0.96) growth = 3 + g * 3;        // 3–6
-    else growth = 6 + g * 14;                     // 6–20 (nadir)
+    if (r < 0.70) growth = 1.08 + g * 0.27;       // 1.08–1.35  (geçiş şansı ~%74–93)
+    else if (r < 0.92) growth = 1.35 + g * 0.45;  // 1.35–1.80
+    else if (r < 0.985) growth = 1.8 + g * 1.0;   // 1.8–2.8
+    else growth = 2.8 + g * 2.2;                  // 2.8–5.0 (nadir)
     mult = Math.min(MAX_MULTIPLIER, round2(mult * growth));
 
     const reach = (1 - HOUSE_EDGE) / mult;

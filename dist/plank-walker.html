@@ -160,10 +160,10 @@ input:disabled { opacity: .6; }
  */
 
 const HOUSE_EDGE = 0.04;
-const TRACK_ROLLS = 32;   // parkur üretimi için ayrılan zar sayısı
-const MAX_SEGMENTS = 14;
-const MIN_SEGMENTS = 8;
-const MAX_MULTIPLIER = 10000;
+const TRACK_ROLLS = 40;   // parkur üretimi için ayrılan zar sayısı
+const MAX_SEGMENTS = 16;
+const MIN_SEGMENTS = 10;
+const MAX_MULTIPLIER = 5000;
 
 const round2 = (n) => Math.round(n * 100) / 100;
 
@@ -180,12 +180,13 @@ function generateTrack(rolls) {
 
   for (let i = 0; i < count; i++) {
     const r = rolls[1 + i * 2], g = rolls[2 + i * 2];
-    // Çarpan büyüme çarpanı: çoğunlukla küçük, ara sıra büyük sıçrama
+    // Çarpan büyüme çarpanı: çoğunlukla küçük adımlar, ara sıra sıçrama.
+    // Büyüme hızı = düşme riski; yavaş büyüme uzun ve gerilimli turlar demek.
     let growth;
-    if (r < 0.55) growth = 1.18 + g * 0.5;        // 1.18–1.68
-    else if (r < 0.85) growth = 1.7 + g * 1.3;    // 1.7–3.0
-    else if (r < 0.96) growth = 3 + g * 3;        // 3–6
-    else growth = 6 + g * 14;                     // 6–20 (nadir)
+    if (r < 0.70) growth = 1.08 + g * 0.27;       // 1.08–1.35  (geçiş şansı ~%74–93)
+    else if (r < 0.92) growth = 1.35 + g * 0.45;  // 1.35–1.80
+    else if (r < 0.985) growth = 1.8 + g * 1.0;   // 1.8–2.8
+    else growth = 2.8 + g * 2.2;                  // 2.8–5.0 (nadir)
     mult = Math.min(MAX_MULTIPLIER, round2(mult * growth));
 
     const reach = (1 - HOUSE_EDGE) / mult;
@@ -265,7 +266,7 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
   const SEG_W = 170;         // bir kalas bölümünün uzunluğu
   const START_W = 240;       // başlangıç platformu
   const FINISH_W = 260;
-  const BADGE_LIFT = 170;    // madalyonun kalas üstünden yüksekliği
+  const BADGE_LIFT = 195;    // madalyonun kalas üstünden yüksekliği
   const WALK_SPEED = 150;    // px/sn
   const PLANK_H = 22;
 
@@ -767,8 +768,172 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
     ctx.restore();
   }
 
-  // ---------- Çizim: karakter ----------
-  const C = { skin: '#f1c7a0', skinD: '#d9a67c', shirt: '#1fb954', shirtD: '#128a3c', pants: '#2b3a67', pantsD: '#1e2a4d', shoe: '#1a1a22', hair: '#3a2416' };
+  // ---------- Çizim: karakter (dağcı) ----------
+  const C = {
+    skin: '#f0c49a', skinD: '#d19a6c', beard: '#4a2e1a',
+    jacket: '#e8402f', jacketD: '#b32a1e', jacketL: '#ff6a52',
+    pants: '#4b5563', pantsD: '#343c48', kneepad: '#23282f',
+    boot: '#6b3f1d', bootD: '#45270f', sole: '#1e1e22', lace: '#e0b23a',
+    glove: '#1d1f26', helmet: '#ff9f1a', helmetD: '#c9720a', lamp: '#8fe9ff',
+    pack: '#2b4c7e', packD: '#1b3157', rope: '#d9b36b', outline: '#141418',
+  };
+  const WALKER_SCALE = 1.2;
+
+  // Dış çizgili uzuv: önce koyu kontur, sonra renk
+  function limb(pts, width, color) {
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (const [w, c] of [[width + 3.5, C.outline], [width, color]]) {
+      ctx.strokeStyle = c; ctx.lineWidth = w;
+      ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+      for (const p of pts.slice(1)) ctx.lineTo(p[0], p[1]);
+      ctx.stroke();
+    }
+  }
+  function outlinedShape(draw, fill, lw = 2) {
+    ctx.beginPath(); draw();
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.lineWidth = lw; ctx.strokeStyle = C.outline; ctx.stroke();
+  }
+
+  function drawBoot(fx, fy, angle, dark) {
+    ctx.save(); ctx.translate(fx, fy); ctx.rotate(angle);
+    outlinedShape(() => {
+      ctx.moveTo(-9, -9); ctx.lineTo(7, -9); ctx.quadraticCurveTo(14, -8, 15, -1); ctx.lineTo(15, 3); ctx.lineTo(-9, 3); ctx.closePath();
+    }, dark ? C.bootD : C.boot);
+    ctx.fillStyle = C.sole; ctx.fillRect(-10, 2, 26, 4);
+    ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fillRect(-7, -8, 12, 2);
+    // bağcıklar
+    ctx.strokeStyle = C.lace; ctx.lineWidth = 1.3;
+    for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.moveTo(-5 + k * 4, -7); ctx.lineTo(-1 + k * 4, -3); ctx.moveTo(-1 + k * 4, -7); ctx.lineTo(-5 + k * 4, -3); ctx.stroke(); }
+    ctx.restore();
+  }
+
+  function drawLeg(hx, thigh, knee, back) {
+    const HIP = -50, L1 = 25, L2 = 25;
+    const kx = hx + Math.sin(thigh) * L1, ky = HIP + Math.cos(thigh) * L1;
+    const a2 = thigh - knee;
+    const fx = kx + Math.sin(a2) * L2, fy = ky + Math.cos(a2) * L2;
+    limb([[hx, HIP], [kx, ky]], 14, back ? C.pantsD : C.pants);
+    limb([[kx, ky], [fx, fy]], 12, back ? C.pantsD : C.pants);
+    // dizlik
+    ctx.fillStyle = C.kneepad; ctx.beginPath(); ctx.ellipse(kx + Math.sin(a2) * 3, ky + Math.cos(a2) * 3, 6, 7, a2, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.15)'; ctx.lineWidth = 1; ctx.stroke();
+    drawBoot(fx, fy, -a2 * 0.35, back);
+    return [fx, fy];
+  }
+
+  function drawArm(shx, a, elbow, back) {
+    const shy = -86;
+    const ex = shx + Math.sin(a) * 19, ey = shy + Math.cos(a) * 19;
+    const a2 = a + elbow;
+    const hx = ex + Math.sin(a2) * 17, hy = ey + Math.cos(a2) * 17;
+    limb([[shx, shy], [ex, ey]], 12, back ? C.jacketD : C.jacket);
+    limb([[ex, ey], [hx, hy]], 11, back ? C.jacketD : C.jacket);
+    // manşet + eldiven
+    ctx.strokeStyle = back ? '#7a1c13' : C.jacketD; ctx.lineWidth = 11; ctx.beginPath(); ctx.moveTo(hx - Math.sin(a2) * 7, hy - Math.cos(a2) * 7); ctx.lineTo(hx - Math.sin(a2) * 3, hy - Math.cos(a2) * 3); ctx.stroke();
+    outlinedShape(() => ctx.arc(hx, hy, 6, 0, Math.PI * 2), C.glove, 1.6);
+    return [hx, hy, a2];
+  }
+
+  function drawBackpack(bounce) {
+    ctx.save(); ctx.translate(0, bounce);
+    // halat bobini
+    ctx.strokeStyle = C.rope; ctx.lineWidth = 2.2;
+    for (let k = 0; k < 4; k++) { ctx.beginPath(); ctx.ellipse(-20, -99 + k * 1.5, 10 - k * 0.8, 6, 0.2, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.strokeStyle = '#8a6a30'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(-20, -97, 10, 6, 0.2, 0, Math.PI * 2); ctx.stroke();
+    // çanta gövdesi
+    outlinedShape(() => ctx.roundRect(-31, -96, 22, 44, 7), C.pack);
+    ctx.fillStyle = C.packD; ctx.beginPath(); ctx.roundRect(-30, -70, 20, 16, 5); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fillRect(-29, -94, 6, 38);
+    // toka ve kayış
+    ctx.fillStyle = '#c9ced6'; ctx.fillRect(-25, -80, 8, 3);
+    ctx.restore();
+  }
+
+  function drawTorso(lean) {
+    ctx.save(); ctx.rotate(lean);
+    const g = ctx.createLinearGradient(-17, 0, 17, 0);
+    g.addColorStop(0, C.jacketD); g.addColorStop(0.45, C.jacket); g.addColorStop(1, C.jacketL);
+    outlinedShape(() => { ctx.moveTo(-17, -94); ctx.lineTo(17, -94); ctx.quadraticCurveTo(19, -70, 16, -48); ctx.lineTo(-16, -48); ctx.quadraticCurveTo(-19, -70, -17, -94); ctx.closePath(); }, g);
+    // kapitone çizgileri
+    ctx.strokeStyle = 'rgba(0,0,0,.22)'; ctx.lineWidth = 1.2;
+    for (let y = -84; y < -52; y += 9) { ctx.beginPath(); ctx.moveTo(-15, y); ctx.quadraticCurveTo(0, y + 2, 15, y); ctx.stroke(); }
+    // fermuar
+    ctx.strokeStyle = '#d7dbe3'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(2, -93); ctx.lineTo(2, -52); ctx.stroke();
+    ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(2, -93); ctx.lineTo(2, -52); ctx.stroke();
+    // göğüs cebi
+    ctx.fillStyle = C.jacketD; ctx.beginPath(); ctx.roundRect(5, -80, 9, 7, 2); ctx.fill();
+    // omuz kayışları (çanta)
+    ctx.strokeStyle = C.packD; ctx.lineWidth = 5; ctx.lineCap = 'butt';
+    ctx.beginPath(); ctx.moveTo(-9, -94); ctx.lineTo(-7, -56); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(9, -94); ctx.lineTo(7, -56); ctx.stroke();
+    ctx.lineCap = 'round';
+    // yaka
+    outlinedShape(() => { ctx.moveTo(-13, -94); ctx.lineTo(13, -94); ctx.lineTo(8, -100); ctx.lineTo(-8, -100); ctx.closePath(); }, C.jacketD, 1.6);
+    // emniyet kemeri + toka + karabina
+    ctx.fillStyle = '#1b1b22'; ctx.fillRect(-17, -56, 34, 6);
+    ctx.fillStyle = '#c9ced6'; ctx.fillRect(-3, -57, 8, 8); ctx.fillStyle = '#1b1b22'; ctx.fillRect(-1, -55, 4, 4);
+    ctx.strokeStyle = '#d0d6e0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(12, -46, 3.5, 5.5, 0.2, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = '#8fe9ff'; ctx.beginPath(); ctx.ellipse(-12, -45, 3.5, 5.5, -0.2, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawHead(tilt, mood) {
+    ctx.save(); ctx.translate(0, -96); ctx.rotate(tilt);
+    // boyun
+    ctx.fillStyle = C.skinD; ctx.fillRect(-5, -6, 10, 10);
+    // kafa
+    outlinedShape(() => ctx.ellipse(1, -18, 14, 16, 0, 0, Math.PI * 2), C.skin, 1.8);
+    // sakal
+    ctx.save(); ctx.beginPath(); ctx.ellipse(1, -18, 13, 15, 0, 0, Math.PI * 2); ctx.clip();
+    ctx.fillStyle = C.beard; ctx.beginPath(); ctx.ellipse(0, -8, 15, 10, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = C.skin; ctx.beginPath(); ctx.ellipse(6, -11, 5, 2.4, 0, 0, Math.PI * 2); ctx.fill(); // ağız çevresi
+    ctx.restore();
+    // ağız
+    ctx.strokeStyle = '#8a3a30'; ctx.lineWidth = 1.6; ctx.beginPath();
+    if (mood === 'scared') ctx.ellipse(7, -10, 2.5, 3, 0, 0, Math.PI * 2);
+    else if (mood === 'cheer') ctx.arc(6, -12, 4.5, 0.15, Math.PI - 0.2);
+    else ctx.arc(7, -12, 3, 0.3, Math.PI - 0.5);
+    ctx.stroke();
+    // burun, göz, kaş
+    ctx.strokeStyle = C.skinD; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(10, -22); ctx.quadraticCurveTo(14, -17, 10, -16); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(7, -22, 3.4, 2.8, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#2a2f3a'; ctx.beginPath(); ctx.arc(8, -22, 1.8, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(8.7, -22.7, 0.6, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = C.beard; ctx.lineWidth = 2; ctx.beginPath();
+    if (mood === 'scared') { ctx.moveTo(3, -28); ctx.lineTo(11, -26); } else { ctx.moveTo(3, -27); ctx.lineTo(11, -27.5); }
+    ctx.stroke();
+    // kulak
+    ctx.fillStyle = C.skinD; ctx.beginPath(); ctx.ellipse(-11, -19, 3, 4, 0, 0, Math.PI * 2); ctx.fill();
+    // çene kayışı
+    ctx.strokeStyle = '#2a2a30'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(-10, -26); ctx.quadraticCurveTo(-8, -10, 2, -6); ctx.stroke();
+    // kask
+    const hg = ctx.createLinearGradient(-14, -38, 14, -24);
+    hg.addColorStop(0, C.helmetD); hg.addColorStop(0.5, C.helmet); hg.addColorStop(1, '#ffc46b');
+    outlinedShape(() => { ctx.moveTo(-15, -26); ctx.quadraticCurveTo(-16, -44, 1, -46); ctx.quadraticCurveTo(18, -44, 16, -26); ctx.quadraticCurveTo(10, -29, 1, -29); ctx.quadraticCurveTo(-8, -29, -15, -26); ctx.closePath(); }, hg, 1.8);
+    ctx.fillStyle = 'rgba(0,0,0,.35)';
+    for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.roundRect(-8 + k * 6, -41, 3, 6, 1.5); ctx.fill(); }
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.ellipse(-4, -41, 6, 2, -0.3, 0, Math.PI * 2); ctx.fill();
+    // kafa lambası
+    ctx.fillStyle = '#1b1b22'; ctx.beginPath(); ctx.roundRect(-15, -34, 31, 4, 2); ctx.fill();
+    outlinedShape(() => ctx.roundRect(9, -37, 9, 8, 2), '#2a2d36', 1.4);
+    ctx.fillStyle = C.lamp; ctx.beginPath(); ctx.roundRect(11, -35.5, 5, 5, 1.5); ctx.fill();
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const lg = ctx.createRadialGradient(14, -33, 1, 14, -33, 14);
+    lg.addColorStop(0, 'rgba(143,233,255,.55)'); lg.addColorStop(1, 'rgba(143,233,255,0)');
+    ctx.fillStyle = lg; ctx.beginPath(); ctx.arc(14, -33, 14, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    ctx.restore();
+  }
+
+  function drawPole(hx, hy, ang) {
+    const L = 64;
+    const tx = hx + Math.sin(ang) * L, ty = hy + Math.cos(ang) * L;
+    limb([[hx - Math.sin(ang) * 10, hy - Math.cos(ang) * 10], [tx, ty]], 3.5, '#9aa3ad');
+    ctx.strokeStyle = '#1b1b22'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(hx - Math.sin(ang) * 10, hy - Math.cos(ang) * 10); ctx.lineTo(hx + Math.sin(ang) * 6, hy + Math.cos(ang) * 6); ctx.stroke();
+    ctx.fillStyle = '#2a2d36'; ctx.beginPath(); ctx.arc(tx - Math.sin(ang) * 6, ty - Math.cos(ang) * 6, 4, 0, Math.PI * 2); ctx.fill();
+  }
 
   function drawWalker() {
     const walking = !!anim.walk, f = anim.fail;
@@ -778,16 +943,18 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
     const cheer = anim.celebrate > 0 ? Math.min(1, anim.celebrate / 0.25) : 0;
 
     // Poz
-    let thighL = 0, thighR = 0, kneeL = 0, kneeR = 0, armL = 0.12, armR = -0.12, elbowL = 0.35, elbowR = 0.35;
-    let bob = 0, lean = 0, rot = 0, alpha = 1, headTilt = 0;
+    let thighL = 0, thighR = 0, kneeL = 0, kneeR = 0, armL = 0.15, armR = -0.15, elbowL = 0.4, elbowR = 0.4;
+    let bob = 0, lean = 0, rot = 0, alpha = 1, headTilt = 0, mood = 'calm', poleAng = 0.3, showPole = true;
     if (walking) {
-      thighL = 0.55 * Math.sin(φ); thighR = -thighL;
+      thighL = 0.5 * Math.sin(φ); thighR = -thighL;
       kneeL = 1.0 * Math.max(0, Math.cos(φ)) * (Math.sin(φ) > -0.2 ? 1 : 0.3);
       kneeR = 1.0 * Math.max(0, -Math.cos(φ)) * (-Math.sin(φ) > -0.2 ? 1 : 0.3);
-      armL = -0.5 * Math.sin(φ); armR = 0.5 * Math.sin(φ);
-      elbowL = elbowR = 0.6;
-      bob = -Math.abs(Math.cos(φ)) * 3; lean = 0.07;
+      armL = -0.45 * Math.sin(φ); armR = 0.25 + 0.4 * Math.sin(φ);
+      elbowL = 0.55; elbowR = 0.95;
+      bob = -Math.abs(Math.cos(φ)) * 3; lean = 0.08;
+      poleAng = 0.45 + 0.35 * Math.sin(φ);
     } else if (f) {
+      mood = 'scared'; showPole = false;
       if (f.style === 'slip') {
         const k = Math.min(1, f.t / 0.35);
         rot = -0.9 * k + Math.max(0, f.t - 0.35) * 1.5;
@@ -800,70 +967,30 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
       }
       alpha = Math.max(0, 1 - Math.max(0, f.t - 0.8) * 1.5);
     } else if (cheer > 0) {
+      mood = 'cheer'; showPole = false;
       armL = -2.9 + Math.sin(anim.time * 12) * 0.15; armR = -2.9 - Math.sin(anim.time * 12) * 0.15; elbowL = elbowR = -0.5;
       bob = -Math.abs(Math.sin(anim.time * 10)) * 5 * cheer; headTilt = -0.1;
     } else if (tension > 0) {
       // Şimşek beklerken yukarı bakar, elini gözüne siper eder
-      armR = -2.4; elbowR = -1.6; armL = 0.2; headTilt = -0.35 * tension; bob = Math.sin(anim.time * 20) * tension * 0.8;
+      armR = -2.4; elbowR = -1.65; armL = 0.2; headTilt = -0.35 * tension; bob = Math.sin(anim.time * 20) * tension * 0.8;
+      showPole = false; mood = tension > 0.6 ? 'scared' : 'calm';
     } else {
       bob = Math.sin(anim.time * 2.2) * 1.2;
-      armL = 0.12 + Math.sin(anim.time * 2.2) * 0.04; armR = -0.12 - Math.sin(anim.time * 2.2) * 0.04;
+      armL = 0.15 + Math.sin(anim.time * 2.2) * 0.04; armR = 0.25 - Math.sin(anim.time * 2.2) * 0.04; elbowR = 0.8;
     }
 
     ctx.save(); ctx.globalAlpha = alpha;
-    // gölge
-    if (!f) { ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(x, sy(0) + 2, 18, 5, 0, 0, Math.PI * 2); ctx.fill(); }
-    ctx.translate(x, y + bob); ctx.rotate(rot + lean);
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    if (!f) { ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.beginPath(); ctx.ellipse(x, sy(0) + 2, 22, 6, 0, 0, Math.PI * 2); ctx.fill(); }
+    ctx.translate(x, y); ctx.scale(WALKER_SCALE, WALKER_SCALE); ctx.translate(0, bob); ctx.rotate(rot);
 
-    const HIP = -48, L1 = 24, L2 = 24;
-    const leg = (hx, thigh, knee, color, shoeCol) => {
-      const kx = hx + Math.sin(thigh) * L1, ky = HIP + Math.cos(thigh) * L1;
-      const a2 = thigh - knee;
-      const fx = kx + Math.sin(a2) * L2, fy = ky + Math.cos(a2) * L2;
-      ctx.strokeStyle = color; ctx.lineWidth = 11;
-      ctx.beginPath(); ctx.moveTo(hx, HIP); ctx.lineTo(kx, ky); ctx.lineTo(fx, fy); ctx.stroke();
-      ctx.save(); ctx.translate(fx, fy); ctx.rotate(-a2 * 0.3);
-      ctx.fillStyle = shoeCol; ctx.beginPath(); ctx.roundRect(-8, -4, 20, 9, 4); ctx.fill();
-      ctx.fillStyle = '#e8e8e8'; ctx.fillRect(-8, 3, 20, 2);
-      ctx.restore();
-    };
-    const arm = (shx, a, elbow, sleeve, skinC) => {
-      const ex = shx + Math.sin(a) * 18, ey = -82 + Math.cos(a) * 18;
-      const a2 = a + elbow;
-      const hx2 = ex + Math.sin(a2) * 16, hy2 = ey + Math.cos(a2) * 16;
-      ctx.strokeStyle = sleeve; ctx.lineWidth = 9; ctx.beginPath(); ctx.moveTo(shx, -82); ctx.lineTo(ex, ey); ctx.stroke();
-      ctx.strokeStyle = skinC; ctx.lineWidth = 7.5; ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(hx2, hy2); ctx.stroke();
-      ctx.fillStyle = skinC; ctx.beginPath(); ctx.arc(hx2, hy2, 5, 0, Math.PI * 2); ctx.fill();
-    };
-
-    // arka bacak + arka kol (koyu)
-    leg(-4, thighL, kneeL, C.pantsD, '#101016');
-    arm(-11, armL, elbowL, C.shirtD, C.skinD);
-    // gövde
-    const tg = ctx.createLinearGradient(-14, -88, 14, -46);
-    tg.addColorStop(0, C.shirt); tg.addColorStop(1, C.shirtD);
-    ctx.fillStyle = tg; ctx.beginPath(); ctx.roundRect(-15, -90, 30, 46, 9); ctx.fill();
-    ctx.fillStyle = '#1b1b24'; ctx.fillRect(-15, -52, 30, 5); ctx.fillStyle = '#ffd54a'; ctx.fillRect(-3, -52, 6, 5);
-    ctx.fillStyle = C.skin; ctx.beginPath(); ctx.moveTo(-6, -90); ctx.lineTo(6, -90); ctx.lineTo(0, -82); ctx.closePath(); ctx.fill();
-    // ön bacak + ön kol
-    leg(4, thighR, kneeR, C.pants, C.shoe);
-    arm(11, armR, elbowR, C.shirt, C.skin);
-    // boyun ve kafa
-    ctx.save(); ctx.translate(0, -92); ctx.rotate(headTilt);
-    ctx.fillStyle = C.skinD; ctx.fillRect(-4, -4, 8, 8);
-    ctx.fillStyle = C.skin; ctx.beginPath(); ctx.ellipse(0, -16, 13, 15, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = C.skinD; ctx.beginPath(); ctx.arc(-11, -16, 3.5, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = C.hair; ctx.beginPath(); ctx.ellipse(0, -24, 13.5, 9, 0, Math.PI, 0); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(-13, -22); ctx.quadraticCurveTo(-6, -30, 4, -28); ctx.quadraticCurveTo(10, -31, 14, -22); ctx.lineTo(13, -18); ctx.quadraticCurveTo(4, -22, -12, -18); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(5, -16, 3.2, 2.6, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#1a1a22'; ctx.beginPath(); ctx.arc(6, -16, 1.6, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = C.hair; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(2, -21); ctx.lineTo(9, -21.5); ctx.stroke();
-    ctx.strokeStyle = '#b5745a'; ctx.lineWidth = 1.4; ctx.beginPath();
-    if (f) ctx.arc(5, -7, 3, Math.PI, 0); else if (cheer) ctx.arc(4, -11, 4.5, 0.1, Math.PI - 0.3); else ctx.arc(5, -10, 3.5, 0.2, Math.PI - 0.6);
-    ctx.stroke();
-    ctx.fillStyle = '#ffd54a'; ctx.beginPath(); ctx.arc(-11, -12, 1.6, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
+    drawBackpack(walking ? Math.abs(Math.cos(φ)) * 1.5 : 0);
+    drawLeg(-5, thighL, kneeL, true);
+    drawArm(-12, armL, elbowL, true);
+    drawTorso(lean);
+    drawLeg(5, thighR, kneeR, false);
+    drawHead(headTilt, mood);
+    const [hx, hy] = drawArm(12, armR, elbowR, false);
+    if (showPole) drawPole(hx, hy, poleAng);
     ctx.restore();
   }
 
