@@ -14,30 +14,49 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-.app { display: grid; grid-template-columns: 320px 1fr; height: 100%; }
-@media (max-width: 860px) { .app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; } .stage { min-height: 420px; } }
+.app { display: flex; flex-direction: column; height: 100%; }
 
-.panel { background: var(--panel); padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
-.brand { font-weight: 900; font-size: 22px; letter-spacing: 2px; }
+/* ---------- Sahne ---------- */
+.stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+canvas { width: 100%; height: 100%; display: block; }
+.brand { position: absolute; left: 16px; top: 12px; font-weight: 900; font-size: 20px; letter-spacing: 2px; text-shadow: 0 2px 8px rgba(0,0,0,.6); }
 .brand span { color: var(--green); }
+.balance { position: absolute; right: 16px; top: 12px; background: rgba(26,44,56,.85); border: 1px solid rgba(255,255,255,.08); border-radius: var(--radius); padding: 8px 12px; display: flex; gap: 10px; align-items: center; }
+.balance span { color: var(--muted); font-size: 12px; }
+.balance strong { font-size: 16px; color: var(--gold); font-variant-numeric: tabular-nums; }
 
-.balance { background: var(--panel-2); border-radius: var(--radius); padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; }
-.balance span { color: var(--muted); font-size: 13px; }
-.balance strong { font-size: 18px; color: var(--gold); }
+.toast {
+  position: absolute; left: 50%; top: 22%; transform: translate(-50%, -20px);
+  background: rgba(0,0,0,.7); color: var(--text); padding: 14px 26px; border-radius: 12px;
+  font-size: 28px; font-weight: 900; opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; text-align: center;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.toast.win { color: var(--green); }
+.toast.lose { color: var(--red); }
 
-.field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+/* ---------- Alt kontrol barı ---------- */
+.dock {
+  background: var(--panel); border-top: 1px solid rgba(255,255,255,.06);
+  display: grid; grid-template-columns: 1.1fr 1.3fr 1.4fr; gap: 14px; padding: 14px 16px; align-items: start;
+}
+.dock-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+
+.field { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--muted); }
 .input-row { display: flex; gap: 6px; }
-input[type=number], input[type=text], select {
+input[type=number], input[type=text] {
   flex: 1; background: var(--bg); color: var(--text); border: 2px solid var(--panel-2);
   border-radius: var(--radius); padding: 10px; font-size: 15px; min-width: 0;
 }
-input:focus, select:focus { outline: none; border-color: var(--muted); }
+input:focus { outline: none; border-color: var(--muted); }
+input:disabled { opacity: .6; }
 .input-row button { background: var(--panel-2); color: var(--text); border: 0; border-radius: var(--radius); padding: 0 14px; font-weight: 700; cursor: pointer; }
 .input-row button:hover { background: #2f4553; }
 
-.btn { border: 0; border-radius: var(--radius); padding: 14px; font-size: 16px; font-weight: 800; cursor: pointer; transition: transform .05s, filter .15s; }
+.action-col { gap: 8px; }
+.round-actions { display: grid; grid-template-columns: 1fr 1.4fr; gap: 8px; }
+.btn { border: 0; border-radius: var(--radius); padding: 16px 12px; font-size: 16px; font-weight: 800; cursor: pointer; transition: transform .05s, filter .15s; white-space: nowrap; }
 .btn:active { transform: scale(.98); }
-.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
 .btn.primary { background: var(--green); color: #05290a; }
 .btn.primary:hover:not(:disabled) { background: var(--green-dark); }
 .btn.step { background: #2f4553; color: var(--text); }
@@ -48,84 +67,83 @@ input:focus, select:focus { outline: none; border-color: var(--muted); }
 .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .stats div { background: var(--panel-2); border-radius: var(--radius); padding: 8px; text-align: center; }
 .stats span { display: block; color: var(--muted); font-size: 11px; }
-.stats strong { font-size: 16px; }
+.stats strong { font-size: 16px; font-variant-numeric: tabular-nums; }
 
-.fair { background: var(--panel-2); border-radius: var(--radius); padding: 10px; font-size: 12px; color: var(--muted); }
+.track-preview { display: flex; flex-wrap: wrap; gap: 4px; min-height: 22px; }
+.track-preview .seg { font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 6px; background: var(--panel-2); color: var(--muted); font-variant-numeric: tabular-nums; }
+.track-preview .seg.done { background: rgba(0,231,1,.18); color: var(--green); }
+.track-preview .seg.cur { outline: 2px solid var(--gold); color: var(--text); }
+.track-preview .seg.dead { background: rgba(237,65,99,.2); color: var(--red); text-decoration: line-through; }
+
+.fair { background: var(--panel-2); border-radius: var(--radius); padding: 8px 10px; font-size: 12px; color: var(--muted); }
 .fair summary { cursor: pointer; color: var(--text); font-weight: 700; }
 .fair-row { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
 .fair code { word-break: break-all; color: var(--text); font-size: 11px; }
 .fair input { font-size: 13px; padding: 6px; }
-
-.track-preview { display: flex; flex-wrap: wrap; gap: 4px; min-height: 22px; }
-.track-preview .seg { font-size: 11px; font-weight: 800; padding: 3px 7px; border-radius: 6px; background: var(--panel-2); color: var(--muted); font-variant-numeric: tabular-nums; }
-.track-preview .seg.done { background: rgba(0,231,1,.18); color: var(--green); }
-.track-preview .seg.cur { outline: 2px solid var(--gold); color: var(--text); }
-.track-preview .seg.dead { background: rgba(237,65,99,.2); color: var(--red); text-decoration: line-through; }
+.fair p { margin: 8px 0 0; }
 
 .history { display: flex; flex-wrap: wrap; gap: 6px; }
 .history .chip { padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
 .chip.win { background: rgba(0,231,1,.15); color: var(--green); }
 .chip.lose { background: rgba(237,65,99,.15); color: var(--red); }
 
-.stage { position: relative; overflow: hidden; }
-canvas { width: 100%; height: 100%; display: block; }
-
-.toast {
-  position: absolute; left: 50%; top: 18%; transform: translate(-50%, -20px);
-  background: rgba(0,0,0,.65); color: var(--text); padding: 14px 24px; border-radius: 12px;
-  font-size: 28px; font-weight: 900; opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s;
-  text-align: center;
+@media (max-width: 860px) {
+  .dock { grid-template-columns: 1fr 1fr; }
+  .stats-col { grid-column: 1 / -1; }
+  .stage { min-height: 300px; }
 }
-.toast.show { opacity: 1; transform: translate(-50%, 0); }
-.toast.win { color: var(--green); }
-.toast.lose { color: var(--red); }
+@media (max-width: 520px) {
+  .dock { grid-template-columns: 1fr; gap: 10px; padding: 10px 16px; }
+  .btn { padding: 14px 10px; font-size: 15px; }
+}
 
 </style>
 <div class="app">
-  <aside class="panel">
-    <div class="brand">PLANK<span>WALKER</span></div>
-
-    <div class="balance">
-      <span>Bakiye</span>
-      <strong id="balance">$1,000.00</strong>
-    </div>
-
-    <label class="field">
-      <span>Bahis Miktarı</span>
-      <div class="input-row">
-        <input id="bet" type="number" min="0.1" step="0.1" value="10">
-        <button data-bet="half">½</button>
-        <button data-bet="double">2×</button>
-      </div>
-    </label>
-
-    <button id="btn-bet" class="btn primary">BAHİS YAP</button>
-    <button id="btn-step" class="btn step" disabled>ADIM AT</button>
-    <button id="btn-cashout" class="btn cashout" disabled>CASH OUT <span id="cashout-amount"></span></button>
-
-    <div class="stats">
-      <div><span>Mevcut Çarpan</span><strong id="cur-mult">1.00×</strong></div>
-      <div><span>Sonraki</span><strong id="next-mult">—</strong></div>
-      <div><span>Geçiş Şansı</span><strong id="next-chance">—</strong></div>
-    </div>
-    <div class="track-preview" id="track-preview"></div>
-
-    <details class="fair">
-      <summary>Provably Fair</summary>
-      <div class="fair-row"><span>Server Seed Hash</span><code id="seed-hash">—</code></div>
-      <div class="fair-row"><span>Client Seed</span><input id="client-seed" type="text" value="plank-walker"></div>
-      <div class="fair-row"><span>Nonce</span><code id="nonce">0</code></div>
-      <div class="fair-row"><span>Son Server Seed</span><code id="revealed-seed">—</code></div>
-      <p>Her turun parkuru (kalas sayısı, çarpanlar, yükseklikler) ve adım zarları aynı seed'den üretilir. Kasa avantajı %4 (RTP %96). Hangi kalasta cash out yaparsan yap beklenen getiri aynıdır.</p>
-    </details>
-
-    <div class="history" id="history"></div>
-  </aside>
-
   <main class="stage">
     <canvas id="game"></canvas>
+    <div class="brand">PLANK<span>WALKER</span></div>
+    <div class="balance"><span>Bakiye</span><strong id="balance">$1,000.00</strong></div>
     <div id="toast" class="toast"></div>
   </main>
+
+  <section class="dock">
+    <div class="dock-col bet-col">
+      <label class="field">
+        <span>Bahis Miktarı</span>
+        <div class="input-row">
+          <input id="bet" type="number" min="0.1" step="0.1" value="10">
+          <button data-bet="half">½</button>
+          <button data-bet="double">2×</button>
+        </div>
+      </label>
+      <div class="history" id="history"></div>
+    </div>
+
+    <div class="dock-col action-col">
+      <button id="btn-bet" class="btn primary">BAHİS YAP</button>
+      <div class="round-actions">
+        <button id="btn-step" class="btn step" disabled>YÜRÜ</button>
+        <button id="btn-cashout" class="btn cashout" disabled>CASH OUT <span id="cashout-amount"></span></button>
+      </div>
+    </div>
+
+    <div class="dock-col stats-col">
+      <div class="stats">
+        <div><span>Mevcut Çarpan</span><strong id="cur-mult">1.00×</strong></div>
+        <div><span>Olası Kazanç</span><strong id="potential">$0.00</strong></div>
+        <div><span>Kalan Kalas</span><strong id="remaining">—</strong></div>
+      </div>
+      <div class="track-preview" id="track-preview"></div>
+      <details class="fair">
+        <summary>Provably Fair</summary>
+        <div class="fair-row"><span>Server Seed Hash</span><code id="seed-hash">—</code></div>
+        <div class="fair-row"><span>Client Seed</span><input id="client-seed" type="text" value="plank-walker"></div>
+        <div class="fair-row"><span>Nonce</span><code id="nonce">0</code></div>
+        <div class="fair-row"><span>Son Server Seed</span><code id="revealed-seed">—</code></div>
+        <p>Parkur (kalas sayısı ve gizli çarpanlar) ile adım zarları aynı seed'den üretilir. Kasa avantajı %4 (RTP %96). Hangi kalasta cash out yaparsan yap beklenen getiri aynıdır.</p>
+      </details>
+    </div>
+  </section>
 </div>
 
 
@@ -142,7 +160,7 @@ canvas { width: 100%; height: 100%; display: block; }
  */
 
 const HOUSE_EDGE = 0.04;
-const TRACK_ROLLS = 48;   // parkur üretimi için ayrılan zar sayısı
+const TRACK_ROLLS = 32;   // parkur üretimi için ayrılan zar sayısı
 const MAX_SEGMENTS = 14;
 const MIN_SEGMENTS = 8;
 const MAX_MULTIPLIER = 10000;
@@ -151,18 +169,17 @@ const round2 = (n) => Math.round(n * 100) / 100;
 
 /**
  * Rastgele parkur üret. rolls[0..TRACK_ROLLS) kullanılır.
- * Dönen segmentler: { index, multiplier, survive, reach, level, width, gap }
- *  - level: kalasın yüksekliği (-2..2, 0 = başlangıç platformu seviyesi)
- *  - width / gap: görsel çeşitlilik için göreli ölçüler (olasılığı etkilemez)
+ * Dönen segmentler: { index, multiplier, survive, reach }
+ * Çarpanlar oyuncuya gizlidir; adam kalasa basınca açıklanır.
  */
 function generateTrack(rolls) {
   if (rolls.length < TRACK_ROLLS) throw new Error('Parkur için yetersiz zar');
   const count = MIN_SEGMENTS + Math.floor(rolls[0] * (MAX_SEGMENTS - MIN_SEGMENTS + 1));
   const segments = [];
-  let mult = 1, level = 0, prevReach = 1;
+  let mult = 1, prevReach = 1;
 
   for (let i = 0; i < count; i++) {
-    const r = rolls[1 + i * 3], g = rolls[2 + i * 3], h = rolls[3 + i * 3];
+    const r = rolls[1 + i * 2], g = rolls[2 + i * 2];
     // Çarpan büyüme çarpanı: çoğunlukla küçük, ara sıra büyük sıçrama
     let growth;
     if (r < 0.55) growth = 1.18 + g * 0.5;        // 1.18–1.68
@@ -171,23 +188,11 @@ function generateTrack(rolls) {
     else growth = 6 + g * 14;                     // 6–20 (nadir)
     mult = Math.min(MAX_MULTIPLIER, round2(mult * growth));
 
-    // Yükseklik: rastgele yürüyüş, -2..2 arasında
-    const dl = h < 0.22 ? -2 : h < 0.42 ? -1 : h < 0.58 ? 0 : h < 0.8 ? 1 : 2;
-    level = Math.max(-2, Math.min(2, level + dl));
-
     const reach = (1 - HOUSE_EDGE) / mult;
     const survive = Math.min(1, reach / prevReach);
     prevReach = reach;
 
-    segments.push({
-      index: i + 1,
-      multiplier: mult,
-      survive,
-      reach,
-      level,
-      width: 0.75 + ((r * 7919) % 1) * 0.35,  // 0.75–1.10
-      gap: 0.6 + ((g * 104729) % 1) * 0.8,    // 0.6–1.4
-    });
+    segments.push({ index: i + 1, multiplier: mult, survive, reach });
     if (mult >= MAX_MULTIPLIER) break; // tavana ulaşıldı, parkur burada biter
   }
   return segments;
@@ -257,60 +262,52 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
   const randomSeed = () => toHex(crypto.getRandomValues(new Uint8Array(32)));
 
   // ---------- Sabitler ----------
-  const LEVEL_H = 64;        // bir yükseklik kademesi (px)
-  const BASE_SEG_W = 140;    // kalas temel genişliği
-  const BASE_GAP = 90;       // kalaslar arası temel boşluk
-  const START_W = 180;       // başlangıç platformu genişliği
-  const BADGE_LIFT = 150;    // madalyonun kalas üstünden yüksekliği
-  const WALKER_H = 96;
+  const SEG_W = 170;         // bir kalas bölümünün uzunluğu
+  const START_W = 240;       // başlangıç platformu
+  const FINISH_W = 260;
+  const BADGE_LIFT = 170;    // madalyonun kalas üstünden yüksekliği
+  const WALK_SPEED = 150;    // px/sn
+  const PLANK_H = 22;
 
   // Çarpan kademeleri: büyüdükçe daha "cool" ve değerli görünüm
   const TIERS = [
-    { name: 'green',   orb: ['#b6ffb0', '#1fcf3f', '#06501c'], ring: ['#ffe680', '#e0a200', '#8a5a00'], text: ['#fdfd8c', '#9cf528'], extrude: '#c2185b', glow: '#4dff7a' },
-    { name: 'blue',    orb: ['#c6ecff', '#2a8df0', '#0a2f72'], ring: ['#ffe680', '#e0a200', '#8a5a00'], text: ['#ffffff', '#86dcff'], extrude: '#0b3f8a', glow: '#55c8ff' },
-    { name: 'purple',  orb: ['#efd4ff', '#9a3cf0', '#2f0a66'], ring: ['#ffe680', '#e0a200', '#8a5a00'], text: ['#fff0ff', '#e1a2ff'], extrude: '#5a0e9e', glow: '#cf7bff' },
-    { name: 'fire',    orb: ['#ffe2a0', '#ff6a1f', '#5e100a'], ring: ['#fff0a0', '#f2b300', '#8a4a00'], text: ['#fff9c8', '#ffb347'], extrude: '#8a1a0a', glow: '#ff8a2a' },
-    { name: 'gold',    orb: ['#fff9d6', '#ffc400', '#6b4500'], ring: ['#ffffff', '#ffd54a', '#b07a00'], text: ['#ffffff', '#ffe36b'], extrude: '#9a5a00', glow: '#ffdd33' },
-    { name: 'diamond', orb: ['#ffffff', '#86f3ff', '#1c3f8e'], ring: ['#ffffff', '#cfefff', '#5f8bb5'], text: ['#ffffff', '#b6fbff'], extrude: '#1c5fa8', glow: '#ffffff', rainbow: true },
+    { orb: ['#b6ffb0', '#1fcf3f', '#06501c'], ring: ['#ffe680', '#e0a200', '#8a5a00'], text: ['#fdfd8c', '#9cf528'], extrude: '#c2185b', glow: '#4dff7a' },
+    { orb: ['#c6ecff', '#2a8df0', '#0a2f72'], ring: ['#ffe680', '#e0a200', '#8a5a00'], text: ['#ffffff', '#86dcff'], extrude: '#0b3f8a', glow: '#55c8ff' },
+    { orb: ['#efd4ff', '#9a3cf0', '#2f0a66'], ring: ['#ffe680', '#e0a200', '#8a5a00'], text: ['#fff0ff', '#e1a2ff'], extrude: '#5a0e9e', glow: '#cf7bff' },
+    { orb: ['#ffe2a0', '#ff6a1f', '#5e100a'], ring: ['#fff0a0', '#f2b300', '#8a4a00'], text: ['#fff9c8', '#ffb347'], extrude: '#8a1a0a', glow: '#ff8a2a' },
+    { orb: ['#fff9d6', '#ffc400', '#6b4500'], ring: ['#ffffff', '#ffd54a', '#b07a00'], text: ['#ffffff', '#ffe36b'], extrude: '#9a5a00', glow: '#ffdd33' },
+    { orb: ['#ffffff', '#86f3ff', '#1c3f8e'], ring: ['#ffffff', '#cfefff', '#5f8bb5'], text: ['#ffffff', '#b6fbff'], extrude: '#1c5fa8', glow: '#ffffff', rainbow: true },
   ];
+  const MYSTERY = { orb: ['#5a6f82', '#2b3d4d', '#101c26'], ring: ['#8a98a8', '#56667a', '#2f3a48'], text: ['#dfe7f0', '#8fa3b8'], extrude: '#1a2430', glow: '#6b8fb0' };
+  const DEAD = { orb: ['#7a4a55', '#4a1f2a', '#1a0a0e'], ring: ['#6b6b6b', '#3f3f3f', '#222'], text: ['#ff8aa0', '#ed4163'], extrude: '#3a0a14', glow: '#ed4163' };
 
   // ---------- Durum ----------
   const state = {
     balance: 1000, bet: 10,
     track: [], stepRolls: [], fallAt: -1,
-    position: 0,              // 0 = başlangıç platformu, i = i. kalas
+    position: 0,            // 0 = başlangıç platformu, i = i. kalas
     playing: false, busy: false,
     serverSeed: randomSeed(), nonce: 0,
     history: [],
   };
 
-  // Geometri: her segmentin dünya koordinatları
-  let geo = { start: { x: 0, w: START_W, y: 0 }, segs: [] };
-  function buildGeometry(track) {
-    const segs = [];
-    let cursor = START_W;
-    for (const s of track) {
-      const w = BASE_SEG_W * s.width;
-      const gap = BASE_GAP * s.gap;
-      const x = cursor + gap;
-      segs.push({ ...s, x, w, cx: x + w / 2, y: -s.level * LEVEL_H });
-      cursor = x + w;
-    }
-    const finish = { x: cursor + BASE_GAP, w: 220, y: segs.length ? segs[segs.length - 1].y : 0 };
-    geo = { start: { x: 0, w: START_W, y: 0 }, segs, finish };
-  }
+  const segCenter = (i) => START_W + i * SEG_W + SEG_W / 2;   // i: 0 tabanlı kalas indeksi
+  const plankEnd = () => START_W + state.track.length * SEG_W;
 
   // ---------- Animasyon ----------
   const anim = {
-    wx: START_W / 2, wy: 0, facing: 1,
-    move: null,            // { from, to, t, dur, type, onDone }
-    fail: null,            // { style, t, x0, y0 }
-    pose: { t: 0 },
-    badges: [],            // { seg, x, y, targetY, vy, state: 'wait'|'fall'|'land'|'rest'|'hit'|'dead', delay, t, bob }
+    wx: START_W / 2, wy: 0,
+    walk: null,            // { from, to, t, dur, onDone }
+    phase: 0,              // yürüme döngüsü fazı
+    strike: null,          // { seg, t, x, fail }
+    bolt: null,            // { pts, branches, t }
+    flash: 0,
+    fail: null,            // { style, t, x0 }
+    celebrate: 0,
+    badges: [],            // kalas başına: { state: 'hidden'|'drop'|'land'|'rest'|'dead', y, t, bob }
+    debris: [],            // kırılan kalas parçaları
     particles: [],
-    sparks: [],
-    cam: { x: 0, y: 0 },
-    shake: 0,
+    camX: 0, shake: 0,
     counter: { shown: 1, target: 1 },
     time: 0,
   };
@@ -327,17 +324,16 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
   window.addEventListener('resize', resize);
   resize();
 
-  // Dünya → ekran: kamera ofseti, zemin satırı ekranın %58'inde
-  const groundScreenY = () => H * 0.58;
-  const sx = (x) => x - anim.cam.x;
-  const sy = (y) => groundScreenY() + y - anim.cam.y;
+  const groundY = () => H * 0.66;
+  const sx = (x) => x - anim.camX;
+  const sy = (y) => groundY() + y;
 
   // ---------- UI ----------
   const fmt = (n) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const ui = {
     balance: $('#balance'), bet: $('#bet'),
     btnBet: $('#btn-bet'), btnStep: $('#btn-step'), btnCash: $('#btn-cashout'), cashAmt: $('#cashout-amount'),
-    curMult: $('#cur-mult'), nextMult: $('#next-mult'), nextChance: $('#next-chance'),
+    curMult: $('#cur-mult'), potential: $('#potential'), remaining: $('#remaining'),
     seedHash: $('#seed-hash'), clientSeed: $('#client-seed'), nonce: $('#nonce'), revealed: $('#revealed-seed'),
     history: $('#history'), toast: $('#toast'), preview: $('#track-preview'),
   };
@@ -347,20 +343,21 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
   function refreshUI() {
     ui.balance.textContent = fmt(state.balance);
     ui.curMult.textContent = currentMultiplier().toFixed(2) + '×';
-    const next = state.track[state.position];
-    ui.nextMult.textContent = next && state.playing ? next.multiplier.toFixed(2) + '×' : '—';
-    ui.nextChance.textContent = next && state.playing ? (next.survive * 100).toFixed(1) + '%' : '—';
+    ui.potential.textContent = state.playing ? fmt(E.payout(state.bet, currentMultiplier())) : '$0.00';
+    ui.remaining.textContent = state.playing ? String(state.track.length - state.position) : '—';
     const inRound = state.playing && !state.busy;
     ui.btnBet.disabled = state.playing;
-    ui.btnStep.disabled = !inRound || !next;
+    ui.btnBet.hidden = state.playing;
+    ui.btnStep.disabled = !inRound || state.position >= state.track.length;
     ui.btnCash.disabled = !inRound || state.position === 0;
     ui.cashAmt.textContent = state.playing && state.position > 0 ? fmt(E.payout(state.bet, currentMultiplier())) : '';
     ui.bet.disabled = state.playing;
     ui.nonce.textContent = state.nonce;
     ui.preview.innerHTML = state.track.map((s, i) => {
-      const cls = state.fallAt === i && !state.playing && state.position <= i ? 'dead'
-        : i < state.position ? 'done' : i === state.position && state.playing ? 'cur' : '';
-      return `<span class="seg ${cls}">${s.multiplier.toFixed(2)}×</span>`;
+      const b = anim.badges[i];
+      const revealed = i < state.position || (b && b.state === 'dead');
+      const cls = b && b.state === 'dead' ? 'dead' : i < state.position ? 'done' : i === state.position && state.playing ? 'cur' : '';
+      return `<span class="seg ${cls}">${revealed ? s.multiplier.toFixed(2) + '×' : '?'}</span>`;
     }).join('');
   }
 
@@ -375,7 +372,7 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
 
   function pushHistory(label, win) {
     state.history.unshift({ label, win });
-    state.history = state.history.slice(0, 14);
+    state.history = state.history.slice(0, 10);
     ui.history.innerHTML = state.history.map((h) => `<span class="chip ${h.win ? 'win' : 'lose'}">${h.label}</span>`).join('');
   }
 
@@ -391,56 +388,48 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
     state.nonce += 1;
     const round = await E.createRound(hmacHex, state.serverSeed, ui.clientSeed.value || 'plank-walker', state.nonce);
     state.track = round.track; state.stepRolls = round.stepRolls; state.fallAt = round.fallAt;
-    state.position = 0; state.playing = true; state.busy = true;
-    buildGeometry(state.track);
+    state.position = 0; state.playing = true; state.busy = false;
 
-    anim.wx = START_W / 2; anim.wy = 0; anim.facing = 1;
-    anim.move = null; anim.fail = null; anim.particles = []; anim.sparks = [];
-    anim.counter = { shown: 1, target: 1 };
-    // Madalyonlar gökten sırayla düşer: küçükten büyüğe (soldan sağa)
-    anim.badges = geo.segs.map((seg, i) => ({
-      seg, x: seg.cx, y: seg.y - 900 - i * 60, targetY: seg.y - BADGE_LIFT, vy: 0,
-      state: 'wait', delay: 0.25 + i * 0.16, t: 0, bob: Math.random() * Math.PI * 2, scale: 1,
-    }));
-    const total = 0.25 + geo.segs.length * 0.16 + 0.9;
-    setTimeout(() => { if (state.playing) { state.busy = false; refreshUI(); } }, total * 1000);
+    anim.wx = START_W / 2; anim.wy = 0; anim.phase = 0;
+    anim.walk = null; anim.strike = null; anim.bolt = null; anim.fail = null; anim.debris = []; anim.particles = [];
+    anim.counter = { shown: 1, target: 1 }; anim.celebrate = 0;
+    anim.badges = state.track.map((_, i) => ({ state: 'hidden', y: -BADGE_LIFT, t: 0, bob: i * 1.3 }));
     refreshUI();
   }
 
   function step() {
     if (!state.playing || state.busy) return;
-    const target = geo.segs[state.position];
-    if (!target) return;
+    const i = state.position;
+    if (i >= state.track.length) return;
     state.busy = true; refreshUI();
-
-    const willFall = state.fallAt === state.position;
-    const from = { x: anim.wx, y: anim.wy };
-    const to = { x: target.cx, y: target.y };
-    const dy = to.y - from.y;
-    const type = dy < -20 ? 'climb' : dy > 20 ? 'drop' : 'hop';
-    anim.move = {
-      from, to, t: 0, type, edgeX: target.x + 14,
-      dur: type === 'climb' ? 1.05 : type === 'drop' ? 0.7 : 0.6,
-      onDone: () => {
-        anim.wx = to.x; anim.wy = to.y;
-        const badge = anim.badges[state.position];
-        if (willFall) {
-          const style = E.failStyle(state.stepRolls[state.position]);
-          anim.fail = { style, t: 0, x0: to.x, y0: to.y, seg: target };
-          if (badge) badge.state = 'dead';
-          anim.shake = style === 'break' ? 12 : 5;
-          setTimeout(() => endRound(false), 1300);
-        } else {
-          state.position += 1;
-          if (badge) { badge.state = 'hit'; badge.t = 0; }
-          anim.counter.target = target.multiplier;
-          burst(to.x, to.y - BADGE_LIFT, TIERS[E.tierOf(target.multiplier)].glow, 36);
-          anim.shake = 2;
-          if (state.position === state.track.length) { setTimeout(() => cashOut(true), 500); return; }
-          state.busy = false; refreshUI();
-        }
-      },
+    const to = segCenter(i);
+    anim.walk = {
+      from: anim.wx, to, t: 0, dur: Math.abs(to - anim.wx) / WALK_SPEED,
+      onDone: () => { anim.wx = to; anim.strike = { seg: i, t: 0, x: to, fail: state.fallAt === i }; },
     };
+  }
+
+  // Şimşek çarpar, çarpan açıklanır (ya da adam düşer)
+  function resolveStrike(s) {
+    const i = s.seg, seg = state.track[i], badge = anim.badges[i];
+    if (s.fail) {
+      const style = E.failStyle(state.stepRolls[i]);
+      badge.state = 'dead'; badge.t = 0;
+      anim.fail = { style, t: 0, x0: anim.wx };
+      anim.shake = 14;
+      if (style === 'break') spawnDebris(i);
+      burst(anim.wx, -BADGE_LIFT, '#ed4163', 40);
+      setTimeout(() => endRound(false), 1500);
+    } else {
+      state.position = i + 1;
+      badge.state = 'drop'; badge.t = 0; badge.y = -H;
+      anim.counter.target = seg.multiplier;
+      anim.celebrate = 0.9;
+      anim.shake = 6 + E.tierOf(seg.multiplier) * 2;
+      if (state.position === state.track.length) { setTimeout(() => cashOut(true), 900); return; }
+      setTimeout(() => { if (state.playing) { state.busy = false; refreshUI(); } }, 450);
+    }
+    refreshUI();
   }
 
   function cashOut(auto = false) {
@@ -448,7 +437,8 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
     const mult = currentMultiplier();
     const win = E.payout(state.bet, mult);
     state.balance += win;
-    burst(anim.wx, anim.wy - 60, '#ffd54a', 80);
+    burst(anim.wx, -70, '#ffd54a', 90);
+    anim.celebrate = 1.5;
     toast(`${mult.toFixed(2)}× · ${fmt(win)} kazandın!`, 'win');
     pushHistory(mult.toFixed(2) + '×', true);
     endRound(true, true);
@@ -466,155 +456,236 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
     refreshUI();
   }
 
-  // ---------- Parçacıklar ----------
+  // ---------- Parçacıklar / enkaz ----------
   function burst(x, y, color, n = 30) {
     for (let i = 0; i < n; i++) {
-      const a = Math.random() * Math.PI * 2, s = 60 + Math.random() * 260;
-      anim.particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 120, life: 0.8 + Math.random() * 0.6, color, size: 2 + Math.random() * 4 });
+      const a = Math.random() * Math.PI * 2, s = 60 + Math.random() * 280;
+      anim.particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 140, life: 0.7 + Math.random() * 0.7, color, size: 2 + Math.random() * 4 });
+    }
+  }
+  function spawnDebris(i) {
+    const x0 = START_W + i * SEG_W;
+    for (let k = 0; k < 4; k++) {
+      anim.debris.push({ x: x0 + k * SEG_W / 4, y: 0, w: SEG_W / 4, vx: (k - 1.5) * 40, vy: -60 + Math.random() * 40, rot: 0, vr: (Math.random() - 0.5) * 6 });
     }
   }
   function updateParticles(dt) {
-    for (const p of anim.particles) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 600 * dt; p.life -= dt; }
+    for (const p of anim.particles) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 700 * dt; p.life -= dt; }
     anim.particles = anim.particles.filter((p) => p.life > 0);
+    for (const d of anim.debris) { d.x += d.vx * dt; d.y += d.vy * dt; d.vy += 1200 * dt; d.rot += d.vr * dt; }
+  }
+
+  // ---------- Şimşek ----------
+  function makeBolt(x, yTopScreen, yBottom) {
+    const pts = [{ x, y: yTopScreen }];
+    const n = 14;
+    for (let k = 1; k <= n; k++) {
+      const t = k / n;
+      pts.push({ x: x + (Math.random() - 0.5) * 70 * (1 - t * 0.6), y: yTopScreen + (yBottom - yTopScreen) * t });
+    }
+    pts[n].x = x;
+    const branches = [];
+    for (let b = 0; b < 3; b++) {
+      const start = pts[3 + Math.floor(Math.random() * 7)];
+      const dir = Math.random() < 0.5 ? -1 : 1;
+      const bp = [start];
+      for (let k = 1; k <= 4; k++) bp.push({ x: start.x + dir * k * (14 + Math.random() * 10), y: start.y + k * (12 + Math.random() * 14) });
+      branches.push(bp);
+    }
+    return { pts, branches, t: 0 };
+  }
+  function drawBolt(b) {
+    const a = Math.max(0, 1 - b.t / 0.4);
+    if (a <= 0) return;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const path = (pts) => { ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); for (const p of pts.slice(1)) ctx.lineTo(p.x, p.y); };
+    for (const [w, col] of [[18, `rgba(120,190,255,${0.25 * a})`], [8, `rgba(180,225,255,${0.6 * a})`], [3, `rgba(255,255,255,${a})`]]) {
+      ctx.lineWidth = w; ctx.strokeStyle = col; path(b.pts); ctx.stroke();
+      for (const br of b.branches) { ctx.lineWidth = w * 0.5; path(br); ctx.stroke(); }
+    }
+    ctx.restore();
+  }
+
+  // ---------- Güncelleme ----------
+  function update(dt) {
+    anim.time += dt;
+    // yürüyüş
+    if (anim.walk) {
+      const w = anim.walk; w.t += dt;
+      const p = Math.min(1, w.t / w.dur);
+      anim.wx = w.from + (w.to - w.from) * p;
+      anim.phase += dt * (WALK_SPEED / 11);
+      if (p >= 1) { const cb = w.onDone; anim.walk = null; cb(); }
+    } else {
+      anim.phase += (Math.round(anim.phase / Math.PI) * Math.PI - anim.phase) * Math.min(1, dt * 10); // ayakları topla
+    }
+    // şimşek gerilimi → çarpma
+    if (anim.strike) {
+      const s = anim.strike; s.t += dt;
+      if (!s.hit && s.t >= 0.75) {
+        s.hit = true;
+        anim.bolt = makeBolt(sx(s.x), -20, s.fail && E.failStyle(state.stepRolls[s.seg]) === 'break' ? sy(0) : sy(-BADGE_LIFT));
+        anim.flash = 1;
+        resolveStrike(s);
+      }
+      if (s.t > 1.2) anim.strike = null;
+    }
+    if (anim.bolt) { anim.bolt.t += dt; if (anim.bolt.t > 0.5) anim.bolt = null; }
+    anim.flash = Math.max(0, anim.flash - dt * 4);
+    anim.celebrate = Math.max(0, anim.celebrate - dt);
+    // madalyonlar
+    for (const b of anim.badges) {
+      b.t += dt;
+      if (b.state === 'drop') {
+        b.y += 2400 * dt;
+        if (b.y >= -BADGE_LIFT) { b.y = -BADGE_LIFT; b.state = 'land'; b.t = 0; }
+      } else if (b.state === 'land') {
+        if (b.t > 0.4) b.state = 'rest';
+      }
+    }
+    // düşüş
+    if (anim.fail) {
+      const f = anim.fail; f.t += dt;
+      if (f.style === 'slip') {
+        anim.wx = f.x0 + Math.min(f.t, 0.5) * 30;
+        anim.wy = f.t > 0.35 ? Math.pow(f.t - 0.35, 2) * 1900 : Math.sin(f.t / 0.35 * Math.PI) * -6;
+      } else {
+        anim.wy = f.t > 0.1 ? Math.pow(f.t - 0.1, 2) * 1700 : 0;
+      }
+    }
+    // kamera
+    const camT = Math.max(0, anim.wx - W * 0.4);
+    anim.camX += (camT - anim.camX) * Math.min(1, dt * 4);
+    anim.shake = Math.max(0, anim.shake - dt * 28);
+    anim.counter.shown += (anim.counter.target - anim.counter.shown) * Math.min(1, dt * 5);
+    updateParticles(dt);
   }
 
   // ---------- Çizim: arka plan ----------
   function drawBackground() {
     const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#07111c'); g.addColorStop(0.55, '#0e2233'); g.addColorStop(1, '#061018');
+    g.addColorStop(0, '#060e18'); g.addColorStop(0.5, '#0e2233'); g.addColorStop(1, '#050c12');
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
 
-    // spot ışıkları (casino sahnesi)
-    ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    for (let i = 0; i < 3; i++) {
-      const bx = W * (0.2 + i * 0.3) + Math.sin(anim.time * 0.4 + i) * 60 - anim.cam.x * 0.08;
-      const beam = ctx.createLinearGradient(bx, 0, bx, H * 0.9);
-      beam.addColorStop(0, 'rgba(120,180,255,0.10)'); beam.addColorStop(1, 'rgba(120,180,255,0)');
-      ctx.fillStyle = beam;
-      ctx.beginPath(); ctx.moveTo(bx - 30, 0); ctx.lineTo(bx + 30, 0); ctx.lineTo(bx + 260, H * 0.9); ctx.lineTo(bx - 260, H * 0.9); ctx.closePath(); ctx.fill();
+    // fırtına bulutları (gerilim anında aydınlanır)
+    const tension = anim.strike ? Math.min(1, anim.strike.t / 0.75) : 0;
+    ctx.save();
+    for (let i = 0; i < 7; i++) {
+      const cx = (((i * 311) - anim.camX * 0.15) % (W + 300) + W + 300) % (W + 300) - 150;
+      const cy = 30 + (i % 3) * 28;
+      const cg = ctx.createRadialGradient(cx, cy, 10, cx, cy, 150);
+      const lum = 0.1 + tension * 0.18 + anim.flash * 0.5;
+      cg.addColorStop(0, `rgba(120,150,200,${lum})`); cg.addColorStop(1, 'rgba(120,150,200,0)');
+      ctx.fillStyle = cg; ctx.fillRect(cx - 160, cy - 160, 320, 320);
     }
     ctx.restore();
 
-    // yıldızlar / altın tozu
-    for (let i = 0; i < 90; i++) {
-      const x = (((i * 137.5) - anim.cam.x * 0.12) % W + W) % W;
-      const y = (((i * 61.8) - anim.cam.y * 0.1) % (H * 0.7) + H * 0.7) % (H * 0.7);
+    // spot ışıkları
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 3; i++) {
+      const bx = W * (0.2 + i * 0.3) + Math.sin(anim.time * 0.35 + i * 2) * 70 - anim.camX * 0.06;
+      const beam = ctx.createLinearGradient(bx, 0, bx, H * 0.9);
+      beam.addColorStop(0, 'rgba(255,215,120,0.07)'); beam.addColorStop(1, 'rgba(255,215,120,0)');
+      ctx.fillStyle = beam;
+      ctx.beginPath(); ctx.moveTo(bx - 30, 0); ctx.lineTo(bx + 30, 0); ctx.lineTo(bx + 240, H * 0.9); ctx.lineTo(bx - 240, H * 0.9); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+
+    // yıldız / altın tozu
+    for (let i = 0; i < 80; i++) {
+      const x = (((i * 137.5) - anim.camX * 0.12) % W + W) % W, y = (i * 61.8) % (H * 0.62);
       const tw = 0.4 + 0.6 * Math.abs(Math.sin(anim.time * 1.5 + i));
-      ctx.fillStyle = i % 7 === 0 ? `rgba(255,215,90,${tw})` : `rgba(255,255,255,${tw * 0.6})`;
-      ctx.fillRect(x, y, i % 7 === 0 ? 2.5 : 1.5, i % 7 === 0 ? 2.5 : 1.5);
+      ctx.fillStyle = i % 6 === 0 ? `rgba(255,215,90,${tw})` : `rgba(255,255,255,${tw * 0.5})`;
+      ctx.fillRect(x, y, i % 6 === 0 ? 2.5 : 1.5, i % 6 === 0 ? 2.5 : 1.5);
     }
 
-    // uzak dağ silüeti (paralaks)
-    ctx.fillStyle = '#0a1a28';
+    // uzak dağlar
+    ctx.fillStyle = '#0a1826';
     ctx.beginPath(); ctx.moveTo(0, H);
     for (let x = 0; x <= W + 40; x += 40) {
-      const wx = x + anim.cam.x * 0.25;
-      ctx.lineTo(x, sy(0) + 40 - anim.cam.y * -0.25 + Math.sin(wx * 0.004) * 50 + Math.sin(wx * 0.013) * 25);
+      const wx = x + anim.camX * 0.25;
+      ctx.lineTo(x, sy(30) + Math.sin(wx * 0.004) * 50 + Math.sin(wx * 0.013) * 25);
     }
     ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
 
     // uçurum sisi
-    const fog = ctx.createLinearGradient(0, H * 0.55, 0, H);
-    fog.addColorStop(0, 'rgba(6,16,24,0)'); fog.addColorStop(1, 'rgba(3,10,16,0.95)');
-    ctx.fillStyle = fog; ctx.fillRect(0, H * 0.55, W, H * 0.45);
+    const fog = ctx.createLinearGradient(0, sy(40), 0, H);
+    fog.addColorStop(0, 'rgba(5,12,18,0)'); fog.addColorStop(1, 'rgba(3,8,14,0.97)');
+    ctx.fillStyle = fog; ctx.fillRect(0, sy(40), W, H);
   }
 
-  // ---------- Çizim: platformlar ve kalaslar ----------
-  function drawPillar(x, w, topY) {
-    const px = sx(x), py = sy(topY);
+  // ---------- Çizim: platformlar ve kalas ----------
+  function drawPillar(x, w) {
+    const px = sx(x), py = sy(0);
     const g = ctx.createLinearGradient(px, 0, px + w, 0);
     g.addColorStop(0, '#22384a'); g.addColorStop(0.5, '#345064'); g.addColorStop(1, '#1b2d3c');
-    ctx.fillStyle = g; ctx.fillRect(px + 8, py + 16, w - 16, H);
-    // taş çizgileri
+    ctx.fillStyle = g; ctx.fillRect(px, py + 12, w, H);
     ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 1;
-    for (let y = py + 40; y < H; y += 34) { ctx.beginPath(); ctx.moveTo(px + 8, y); ctx.lineTo(px + w - 8, y); ctx.stroke(); }
-    // alt sis
-    const fade = ctx.createLinearGradient(0, py + 120, 0, py + 420);
-    fade.addColorStop(0, 'rgba(6,16,24,0)'); fade.addColorStop(1, 'rgba(6,16,24,1)');
-    ctx.fillStyle = fade; ctx.fillRect(px, py + 120, w, 400);
+    for (let y = py + 44; y < H; y += 34) { ctx.beginPath(); ctx.moveTo(px, y); ctx.lineTo(px + w, y); ctx.stroke(); }
   }
-
-  function drawPlank(seg, broken) {
-    const px = sx(seg.x), py = sy(seg.y), w = seg.w;
-    ctx.save();
-    if (broken) {
-      const t = Math.min(1, anim.fail.t * 1.6);
-      // iki parça kırılıp aşağı sarkar
-      ctx.translate(px + w / 2, py);
-      for (const dir of [-1, 1]) {
-        ctx.save(); ctx.rotate(dir * t * 0.9); ctx.translate(0, t * 20);
-        drawPlankBody(dir < 0 ? -w / 2 : 0, 0, w / 2, true);
-        ctx.restore();
-      }
-      ctx.restore(); return;
-    }
-    drawPlankBody(px, py, w, false);
-    ctx.restore();
+  function drawPlatform(x, w, label, colors) {
+    drawPillar(x, w);
+    const px = sx(x), py = sy(0);
+    const g = ctx.createLinearGradient(0, py, 0, py + 30);
+    g.addColorStop(0, colors[0]); g.addColorStop(1, colors[1]);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(px, py - 4, w, 34, 6); ctx.fill();
+    ctx.fillStyle = '#ffd54a'; ctx.fillRect(px, py - 4, w, 3);
+    ctx.font = 'bold 12px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,255,255,.55)';
+    ctx.fillText(label, px + w / 2, py + 18);
   }
-  function drawPlankBody(x, y, w, dark) {
-    const h = 24;
-    const g = ctx.createLinearGradient(0, y, 0, y + h);
-    g.addColorStop(0, dark ? '#7a4a25' : '#b87333'); g.addColorStop(0.5, dark ? '#5e361a' : '#9a5a26'); g.addColorStop(1, dark ? '#3a2010' : '#6b3c17');
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.roundRect(x, y, w, h, 4); ctx.fill();
-    // ahşap damarları
+  function drawPlankSegment(x, w, y, rot, broken) {
+    ctx.save(); ctx.translate(sx(x) + w / 2, sy(y)); ctx.rotate(rot); ctx.translate(-w / 2, 0);
+    const h = PLANK_H;
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, broken ? '#7a4a25' : '#b87333'); g.addColorStop(0.5, broken ? '#5e361a' : '#9a5a26'); g.addColorStop(1, broken ? '#3a2010' : '#6b3c17');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
     ctx.strokeStyle = 'rgba(40,20,5,.35)'; ctx.lineWidth = 1.2;
     for (let i = 0; i < 3; i++) {
-      ctx.beginPath(); ctx.moveTo(x + 8, y + 6 + i * 6);
-      ctx.bezierCurveTo(x + w * 0.3, y + 4 + i * 6 + (i % 2) * 3, x + w * 0.7, y + 8 + i * 6, x + w - 8, y + 5 + i * 6);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(4, 5 + i * 6);
+      ctx.bezierCurveTo(w * 0.3, 3 + i * 6 + (i % 2) * 3, w * 0.7, 8 + i * 6, w - 4, 5 + i * 6); ctx.stroke();
     }
-    // üst parlaklık ve metal bantlar
-    ctx.fillStyle = 'rgba(255,220,160,.25)'; ctx.fillRect(x + 3, y + 1, w - 6, 2);
-    ctx.fillStyle = '#c9a227'; ctx.fillRect(x + 6, y - 2, 6, h + 4); ctx.fillRect(x + w - 12, y - 2, 6, h + 4);
-    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(x, y + h, w, 6);
+    ctx.fillStyle = 'rgba(255,220,160,.25)'; ctx.fillRect(2, 1, w - 4, 2);
+    ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(0, h, w, 5);
+    ctx.restore();
+  }
+  function drawRope(x) {
+    const px = sx(x), py = sy(0);
+    ctx.strokeStyle = '#6b5436'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(px, -10); ctx.lineTo(px, py); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px - 1, -10); ctx.lineTo(px - 1, py); ctx.stroke();
+    ctx.fillStyle = '#c9a227'; ctx.fillRect(px - 5, py - 6, 10, PLANK_H + 10);
   }
 
   function drawStage() {
-    // başlangıç platformu
-    drawPillar(geo.start.x - 40, geo.start.w + 40, 0);
-    const px = sx(geo.start.x - 40), py = sy(0);
-    const g = ctx.createLinearGradient(0, py, 0, py + 30);
-    g.addColorStop(0, '#4a6a82'); g.addColorStop(1, '#2a3f52');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(px, py, geo.start.w + 40, 30, 6); ctx.fill();
-    ctx.fillStyle = '#ffd54a'; ctx.fillRect(px, py, geo.start.w + 40, 3);
-    ctx.font = 'bold 12px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,255,255,.5)';
-    ctx.fillText('BAŞLANGIÇ', px + (geo.start.w + 40) / 2, py + 20);
-
-    // kalaslar
-    geo.segs.forEach((seg, i) => {
-      drawPillar(seg.x, seg.w, seg.y);
-      const broken = anim.fail && anim.fail.style === 'break' && anim.fail.seg === seg;
-      drawPlank(seg, broken);
+    const n = state.track.length;
+    drawPlatform(0, START_W, 'BAŞLANGIÇ', ['#4a6a82', '#2a3f52']);
+    if (n > 0) {
+      const brokenIdx = anim.fail && anim.fail.style === 'break' ? state.position : -1;
+      for (let i = 0; i < n; i++) {
+        if (i === brokenIdx) continue;
+        drawPlankSegment(START_W + i * SEG_W, SEG_W, 0, 0, false);
+      }
+      for (let i = 0; i <= n; i++) drawRope(START_W + i * SEG_W);
+      for (const d of anim.debris) drawPlankSegment(d.x, d.w, d.y, d.rot, true);
+      // numaralar
       ctx.font = 'bold 12px Inter, sans-serif'; ctx.textAlign = 'center';
-      ctx.fillStyle = i < state.position ? 'rgba(0,231,1,.7)' : 'rgba(255,255,255,.35)';
-      ctx.fillText(String(i + 1), sx(seg.cx), sy(seg.y) + 44);
-    });
-
-    // bitiş platformu
-    if (geo.finish) {
-      drawPillar(geo.finish.x, geo.finish.w, geo.finish.y);
-      const fx = sx(geo.finish.x), fy = sy(geo.finish.y);
-      const fg = ctx.createLinearGradient(0, fy, 0, fy + 30);
-      fg.addColorStop(0, '#5a4a1a'); fg.addColorStop(1, '#2a2410');
-      ctx.fillStyle = fg; ctx.beginPath(); ctx.roundRect(fx, fy, geo.finish.w, 30, 6); ctx.fill();
-      ctx.fillStyle = '#ffd54a'; ctx.fillRect(fx, fy, geo.finish.w, 3);
-      ctx.font = 'bold 14px Inter, sans-serif'; ctx.fillStyle = '#ffd54a'; ctx.textAlign = 'center';
-      ctx.fillText('BİTİŞ · TAM ÖDEME', fx + geo.finish.w / 2, fy - 12);
+      for (let i = 0; i < n; i++) {
+        ctx.fillStyle = i < state.position ? 'rgba(0,231,1,.75)' : 'rgba(255,255,255,.3)';
+        ctx.fillText(String(i + 1), sx(segCenter(i)), sy(0) + 44);
+      }
+      drawPlatform(plankEnd(), FINISH_W, 'BİTİŞ · TAM ÖDEME', ['#5a4a1a', '#2a2410']);
     }
   }
 
-  // ---------- Çizim: madalyon (kanatlı çarpan) ----------
-  const badgeCache = new Map();
-  function badgeSprite(tier) {
-    if (badgeCache.has(tier)) return badgeCache.get(tier);
-    const T = TIERS[tier];
+  // ---------- Çizim: madalyon ----------
+  const spriteCache = new Map();
+  function badgeSprite(key, T) {
+    if (spriteCache.has(key)) return spriteCache.get(key);
     const size = 260, c = document.createElement('canvas');
     c.width = c.height = size * 2;
     const g = c.getContext('2d'); g.scale(2, 2); g.translate(size / 2, size / 2);
     const R = 46;
-
-    // kanatlar
     for (const dir of [-1, 1]) {
       g.save(); g.scale(dir, 1);
       for (let f = 0; f < 5; f++) {
@@ -622,70 +693,72 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
         g.save(); g.translate(R + 4, 6 + f * 4); g.rotate(ang);
         const wg = g.createLinearGradient(0, 0, len, 0);
         wg.addColorStop(0, T.ring[1]); wg.addColorStop(0.6, T.ring[0]); wg.addColorStop(1, T.ring[2]);
-        g.fillStyle = wg;
-        g.beginPath(); g.ellipse(len / 2, 0, len / 2, wdt / 2, 0, 0, Math.PI * 2); g.fill();
-        g.strokeStyle = 'rgba(80,40,0,.35)'; g.lineWidth = 1; g.stroke();
+        g.fillStyle = wg; g.beginPath(); g.ellipse(len / 2, 0, len / 2, wdt / 2, 0, 0, Math.PI * 2); g.fill();
+        g.strokeStyle = 'rgba(0,0,0,.3)'; g.lineWidth = 1; g.stroke();
         g.restore();
       }
       g.restore();
     }
-    // halka
     const rg = g.createLinearGradient(0, -R, 0, R);
     rg.addColorStop(0, T.ring[0]); rg.addColorStop(0.5, T.ring[1]); rg.addColorStop(1, T.ring[2]);
     g.lineWidth = 11; g.strokeStyle = rg; g.beginPath(); g.arc(0, 0, R + 5, 0, Math.PI * 2); g.stroke();
-    g.lineWidth = 2; g.strokeStyle = 'rgba(60,30,0,.5)'; g.beginPath(); g.arc(0, 0, R + 10.5, 0, Math.PI * 2); g.stroke();
+    g.lineWidth = 2; g.strokeStyle = 'rgba(0,0,0,.45)'; g.beginPath(); g.arc(0, 0, R + 10.5, 0, Math.PI * 2); g.stroke();
     g.strokeStyle = 'rgba(255,255,255,.35)'; g.beginPath(); g.arc(0, 0, R + 1, 0, Math.PI * 2); g.stroke();
-    // küre
     const og = g.createRadialGradient(-R * 0.35, -R * 0.4, 4, 0, 0, R);
     og.addColorStop(0, T.orb[0]); og.addColorStop(0.5, T.orb[1]); og.addColorStop(1, T.orb[2]);
     g.fillStyle = og; g.beginPath(); g.arc(0, 0, R, 0, Math.PI * 2); g.fill();
-    // iç girdap
     g.save(); g.beginPath(); g.arc(0, 0, R, 0, Math.PI * 2); g.clip();
     g.strokeStyle = 'rgba(255,255,255,.18)'; g.lineWidth = 6;
     for (let i = 0; i < 3; i++) { g.beginPath(); g.arc(10 - i * 8, 8 - i * 6, 20 + i * 9, 0.6 + i, 2.6 + i); g.stroke(); }
     g.restore();
-    // parlama
     const hg = g.createRadialGradient(-R * 0.4, -R * 0.5, 2, -R * 0.4, -R * 0.5, R * 0.6);
     hg.addColorStop(0, 'rgba(255,255,255,.75)'); hg.addColorStop(1, 'rgba(255,255,255,0)');
     g.fillStyle = hg; g.beginPath(); g.ellipse(-R * 0.35, -R * 0.45, R * 0.5, R * 0.3, -0.6, 0, Math.PI * 2); g.fill();
-
-    badgeCache.set(tier, c);
+    spriteCache.set(key, c);
     return c;
   }
 
-  function drawBadge(b) {
-    const m = b.seg.multiplier, tier = E.tierOf(m), T = TIERS[tier];
-    const x = sx(b.x), y = sy(b.y);
-    const pulse = b.state === 'hit' ? 1 + Math.max(0, 0.35 - b.t) * 1.4 : 1;
-    const s = (0.78 + tier * 0.03) * b.scale * pulse;
+  function hexA(hex, a) {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${Math.max(0, Math.min(1, a))})`;
+  }
+
+  function drawBadge(i) {
+    const b = anim.badges[i], seg = state.track[i];
+    const hidden = b.state === 'hidden';
+    const T = b.state === 'dead' ? DEAD : hidden ? MYSTERY : TIERS[E.tierOf(seg.multiplier)];
+    const key = b.state === 'dead' ? 'dead' : hidden ? 'mystery' : E.tierOf(seg.multiplier);
+    const bobY = (hidden || b.state === 'rest') ? Math.sin(anim.time * 2 + b.bob) * 5 : 0;
+    const x = sx(segCenter(i)), y = sy(b.y) + bobY;
+    let s = hidden ? 0.52 : 0.8 + E.tierOf(seg.multiplier) * 0.03;
+    if (b.state === 'land') s *= 1 + Math.sin(Math.min(1, b.t / 0.4) * Math.PI) * 0.3;
+    if (b.state === 'dead') s *= 0.8;
+    const tension = anim.strike && anim.strike.seg === i && !anim.strike.hit ? Math.min(1, anim.strike.t / 0.75) : 0;
+
     ctx.save(); ctx.translate(x, y);
     // ışıma
-    if (b.state !== 'dead') {
-      ctx.save(); ctx.globalCompositeOperation = 'lighter';
-      const glow = ctx.createRadialGradient(0, 0, 10, 0, 0, 90 * s);
-      const a = 0.25 + 0.15 * Math.sin(anim.time * 3 + b.bob) + (b.state === 'hit' ? 0.4 : 0) + tier * 0.05;
-      glow.addColorStop(0, hexA(T.glow, a)); glow.addColorStop(1, hexA(T.glow, 0));
-      ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(0, 0, 90 * s, 0, Math.PI * 2); ctx.fill();
-      if (T.rainbow) {
-        ctx.rotate(anim.time * 1.2);
-        for (let i = 0; i < 8; i++) {
-          ctx.rotate(Math.PI / 4);
-          const rg = ctx.createLinearGradient(0, 0, 0, -110 * s);
-          rg.addColorStop(0, `hsla(${(anim.time * 90 + i * 45) % 360},100%,70%,.35)`); rg.addColorStop(1, 'rgba(255,255,255,0)');
-          ctx.fillStyle = rg; ctx.beginPath(); ctx.moveTo(-8, 0); ctx.lineTo(8, 0); ctx.lineTo(0, -110 * s); ctx.closePath(); ctx.fill();
-        }
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const ga = hidden ? 0.08 + tension * 0.5 + Math.sin(anim.time * 10) * tension * 0.2 : 0.22 + 0.12 * Math.sin(anim.time * 3 + b.bob) + (b.state === 'land' ? 0.5 : 0) + (typeof key === 'number' ? key * 0.04 : 0);
+    const glow = ctx.createRadialGradient(0, 0, 8, 0, 0, 95 * s);
+    glow.addColorStop(0, hexA(T.glow, ga)); glow.addColorStop(1, hexA(T.glow, 0));
+    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(0, 0, 95 * s, 0, Math.PI * 2); ctx.fill();
+    if (T.rainbow && !hidden) {
+      ctx.rotate(anim.time * 1.2);
+      for (let k = 0; k < 8; k++) {
+        ctx.rotate(Math.PI / 4);
+        const rg = ctx.createLinearGradient(0, 0, 0, -115 * s);
+        rg.addColorStop(0, `hsla(${(anim.time * 90 + k * 45) % 360},100%,70%,.35)`); rg.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = rg; ctx.beginPath(); ctx.moveTo(-8, 0); ctx.lineTo(8, 0); ctx.lineTo(0, -115 * s); ctx.closePath(); ctx.fill();
       }
-      ctx.restore();
     }
+    ctx.restore();
+
     ctx.scale(s, s);
-    if (b.state === 'dead') ctx.filter = 'grayscale(1) brightness(.6)';
-    ctx.drawImage(badgeSprite(tier), -130, -130, 260, 260);
-    ctx.filter = 'none';
-    // yazı: 3D ekstrüzyon + gradyan
-    const label = (m >= 100 ? m.toFixed(0) : m.toFixed(m >= 10 ? 1 : 2)) + 'x';
-    const fs = label.length > 5 ? 26 : label.length > 4 ? 30 : 36;
-    ctx.font = `900 ${fs}px Inter, Arial Black, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.lineJoin = 'round';
+    ctx.drawImage(badgeSprite(key, T), -130, -130, 260, 260);
+    const m = seg.multiplier;
+    const label = hidden ? '?' : b.state === 'dead' ? '✕' : (m >= 100 ? m.toFixed(0) : m.toFixed(m >= 10 ? 1 : 2)) + 'x';
+    const fs = hidden ? 54 : label.length > 5 ? 26 : label.length > 4 ? 30 : 36;
+    ctx.font = `900 ${fs}px Inter, Arial Black, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
     for (let d = 5; d >= 1; d--) { ctx.fillStyle = T.extrude; ctx.fillText(label, 0, d); }
     ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,.65)'; ctx.strokeText(label, 0, 0);
     const tg = ctx.createLinearGradient(0, -fs / 2, 0, fs / 2);
@@ -693,182 +766,122 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
     ctx.fillStyle = tg; ctx.fillText(label, 0, 0);
     ctx.restore();
   }
-  function hexA(hex, a) {
-    const n = parseInt(hex.slice(1), 16);
-    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${Math.max(0, Math.min(1, a))})`;
-  }
-
-  function updateBadges(dt) {
-    for (const b of anim.badges) {
-      b.t += dt;
-      if (b.state === 'wait') { if (b.t >= b.delay) { b.state = 'fall'; b.vy = 0; } continue; }
-      if (b.state === 'fall') {
-        b.vy += 2600 * dt; b.y += b.vy * dt;
-        if (b.y >= b.targetY) {
-          b.y = b.targetY; b.state = 'land'; b.t = 0;
-          burst(b.x, b.y, TIERS[E.tierOf(b.seg.multiplier)].glow, 14 + E.tierOf(b.seg.multiplier) * 6);
-          anim.shake = Math.max(anim.shake, 3 + E.tierOf(b.seg.multiplier));
-        }
-      } else if (b.state === 'land') {
-        b.scale = 1 + Math.sin(Math.min(1, b.t / 0.35) * Math.PI) * 0.22;
-        if (b.t > 0.35) { b.state = 'rest'; b.scale = 1; }
-      } else if (b.state === 'rest' || b.state === 'hit') {
-        b.y = b.targetY + Math.sin(anim.time * 2 + b.bob) * 5;
-        if (b.state === 'hit' && b.t > 0.6) b.state = 'rest';
-      }
-    }
-  }
 
   // ---------- Çizim: karakter ----------
-  function updateWalker(dt) {
-    anim.pose.t += dt;
-    const mv = anim.move;
-    if (mv) {
-      mv.t += dt;
-      const p = Math.min(1, mv.t / mv.dur);
-      const { from, to } = mv;
-      if (mv.type === 'hop') {
-        anim.wx = from.x + (to.x - from.x) * p;
-        anim.wy = from.y + (to.y - from.y) * p - Math.sin(p * Math.PI) * 55;
-      } else if (mv.type === 'drop') {
-        const e = p * p;
-        anim.wx = from.x + (to.x - from.x) * (0.3 * p + 0.7 * Math.sqrt(p));
-        anim.wy = from.y + (to.y - from.y) * e - Math.sin(p * Math.PI) * 30;
-      } else { // climb: 1) kenara sıçra ve tutun 2) kendini yukarı çek
-        if (p < 0.55) {
-          const q = p / 0.55;
-          const hangY = to.y + 58;
-          anim.wx = from.x + (mv.edgeX - from.x) * q;
-          anim.wy = from.y + (hangY - from.y) * q - Math.sin(q * Math.PI) * 40;
-        } else {
-          const q = (p - 0.55) / 0.45, eq = 1 - Math.pow(1 - q, 2);
-          anim.wx = mv.edgeX + (to.x - mv.edgeX) * eq;
-          anim.wy = (to.y + 58) + (to.y - (to.y + 58)) * eq;
-        }
-      }
-      anim.facing = 1;
-      if (p >= 1) { const cb = mv.onDone; anim.move = null; cb(); }
-    }
-    if (anim.fail) {
-      const f = anim.fail; f.t += dt;
-      if (f.style === 'slip') {
-        anim.wx = f.x0 + Math.min(f.t, 0.45) * 160 + Math.max(0, f.t - 0.45) * 90;
-        anim.wy = f.y0 + (f.t > 0.45 ? Math.pow(f.t - 0.45, 2) * 1900 : 0);
-      } else {
-        anim.wy = f.y0 + Math.max(0, f.t - 0.15) ** 2 * 1700;
-        anim.wx = f.x0 + Math.sin(f.t * 8) * 4;
-      }
-    }
-  }
+  const C = { skin: '#f1c7a0', skinD: '#d9a67c', shirt: '#1fb954', shirtD: '#128a3c', pants: '#2b3a67', pantsD: '#1e2a4d', shoe: '#1a1a22', hair: '#3a2416' };
 
   function drawWalker() {
-    const mv = anim.move, f = anim.fail;
+    const walking = !!anim.walk, f = anim.fail;
     const x = sx(anim.wx), y = sy(anim.wy);
-    const t = anim.pose.t;
-    // Poz parametreleri
-    let legL = 0, legR = 0, kneeBend = 0, armL = 0.3, armR = -0.3, armsUp = 0, lean = 0, crouch = 0, rot = 0, alpha = 1;
-    const breathe = Math.sin(t * 2.2) * 1.2;
-    if (mv) {
-      const p = Math.min(1, mv.t / mv.dur);
-      if (mv.type === 'climb' && p >= 0.55) { armsUp = 1; kneeBend = 1 - (p - 0.55) / 0.45; lean = 0.15; }
-      else if (mv.type === 'climb') { armsUp = Math.min(1, p * 3); kneeBend = 0.6; lean = 0.2; }
-      else { kneeBend = Math.sin(p * Math.PI) * 0.9; armL = -1.2 * Math.sin(p * Math.PI); armR = 1.0 * Math.sin(p * Math.PI); lean = 0.18 * Math.sin(p * Math.PI); legL = 0.5; legR = -0.6; }
+    const φ = anim.phase;
+    const tension = anim.strike && !anim.strike.hit ? Math.min(1, anim.strike.t / 0.75) : 0;
+    const cheer = anim.celebrate > 0 ? Math.min(1, anim.celebrate / 0.25) : 0;
+
+    // Poz
+    let thighL = 0, thighR = 0, kneeL = 0, kneeR = 0, armL = 0.12, armR = -0.12, elbowL = 0.35, elbowR = 0.35;
+    let bob = 0, lean = 0, rot = 0, alpha = 1, headTilt = 0;
+    if (walking) {
+      thighL = 0.55 * Math.sin(φ); thighR = -thighL;
+      kneeL = 1.0 * Math.max(0, Math.cos(φ)) * (Math.sin(φ) > -0.2 ? 1 : 0.3);
+      kneeR = 1.0 * Math.max(0, -Math.cos(φ)) * (-Math.sin(φ) > -0.2 ? 1 : 0.3);
+      armL = -0.5 * Math.sin(φ); armR = 0.5 * Math.sin(φ);
+      elbowL = elbowR = 0.6;
+      bob = -Math.abs(Math.cos(φ)) * 3; lean = 0.07;
     } else if (f) {
-      if (f.style === 'slip') { rot = Math.min(1.6, f.t * 2.4); armL = -2; armR = -1.8; legL = 1; legR = -0.6; }
-      else { rot = Math.sin(f.t * 6) * 0.2; armL = -2.4; armR = -2.4; legL = 0.6; legR = -0.5; }
-      alpha = Math.max(0, 1 - Math.max(0, f.t - 0.75) * 1.6);
+      if (f.style === 'slip') {
+        const k = Math.min(1, f.t / 0.35);
+        rot = -0.9 * k + Math.max(0, f.t - 0.35) * 1.5;
+        thighL = 0.9 * k; thighR = 0.6 * k; kneeL = 0.2; kneeR = 0.5;
+        armL = -2.6 + Math.sin(f.t * 14) * 0.4; armR = -2.4 - Math.sin(f.t * 14) * 0.4; elbowL = elbowR = 0.2;
+      } else {
+        rot = Math.sin(f.t * 5) * 0.25;
+        thighL = 0.5; thighR = -0.3; kneeL = 0.9; kneeR = 0.4;
+        armL = -2.7 + Math.sin(f.t * 16) * 0.5; armR = -2.5 - Math.sin(f.t * 16) * 0.5; elbowL = elbowR = 0.3;
+      }
+      alpha = Math.max(0, 1 - Math.max(0, f.t - 0.8) * 1.5);
+    } else if (cheer > 0) {
+      armL = -2.9 + Math.sin(anim.time * 12) * 0.15; armR = -2.9 - Math.sin(anim.time * 12) * 0.15; elbowL = elbowR = -0.5;
+      bob = -Math.abs(Math.sin(anim.time * 10)) * 5 * cheer; headTilt = -0.1;
+    } else if (tension > 0) {
+      // Şimşek beklerken yukarı bakar, elini gözüne siper eder
+      armR = -2.4; elbowR = -1.6; armL = 0.2; headTilt = -0.35 * tension; bob = Math.sin(anim.time * 20) * tension * 0.8;
     } else {
-      // idle: hafif nefes, kollar sallanır
-      armL = 0.25 + Math.sin(t * 2.2) * 0.05; armR = -0.25 - Math.sin(t * 2.2) * 0.05; crouch = breathe * 0.3;
+      bob = Math.sin(anim.time * 2.2) * 1.2;
+      armL = 0.12 + Math.sin(anim.time * 2.2) * 0.04; armR = -0.12 - Math.sin(anim.time * 2.2) * 0.04;
     }
 
     ctx.save(); ctx.globalAlpha = alpha;
-    // gölge (yere yakınsa)
-    const groundY = sy(nearestGroundY());
-    const h = Math.max(0, groundY - y);
-    if (!f && h < 300) {
-      ctx.fillStyle = `rgba(0,0,0,${Math.max(0, 0.35 - h / 400)})`;
-      ctx.beginPath(); ctx.ellipse(x, groundY + 2, Math.max(4, 20 - h / 30), Math.max(2, 6 - h / 100), 0, 0, Math.PI * 2); ctx.fill();
-    }
-
-    ctx.translate(x, y + crouch); ctx.rotate(rot + lean); ctx.scale(anim.facing, 1);
-    const skin = '#f1c7a0', skinD = '#d9a67c', shirt = '#1fb954', shirtD = '#128a3c', pants = '#2b3a67', shoe = '#1a1a22', hair = '#3a2416';
-
+    // gölge
+    if (!f) { ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(x, sy(0) + 2, 18, 5, 0, 0, Math.PI * 2); ctx.fill(); }
+    ctx.translate(x, y + bob); ctx.rotate(rot + lean);
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    // --- Bacaklar (kalça -> diz -> ayak) ---
-    const hipY = -44;
-    for (const [side, swing] of [[-1, legL], [1, legR]]) {
-      const hx = side * 7;
-      const kx = hx + Math.sin(swing) * 14, ky = hipY + 22 - kneeBend * 10;
-      const fx = kx + Math.sin(swing * 0.5) * 6 + kneeBend * 10 * side, fy = ky + 22 - kneeBend * 6;
-      ctx.strokeStyle = pants; ctx.lineWidth = 11;
-      ctx.beginPath(); ctx.moveTo(hx, hipY); ctx.lineTo(kx, ky); ctx.lineTo(fx, fy); ctx.stroke();
-      // ayakkabı
-      ctx.fillStyle = shoe; ctx.beginPath(); ctx.roundRect(fx - 7, fy - 3, 18, 8, 4); ctx.fill();
-      ctx.fillStyle = '#e8e8e8'; ctx.fillRect(fx - 7, fy + 3, 18, 2);
-    }
-    // --- Gövde ---
-    const tg = ctx.createLinearGradient(-14, -84, 14, -44);
-    tg.addColorStop(0, shirt); tg.addColorStop(1, shirtD);
-    ctx.fillStyle = tg; ctx.beginPath(); ctx.roundRect(-15, -86, 30, 44, 9); ctx.fill();
-    // kemer
-    ctx.fillStyle = '#1b1b24'; ctx.fillRect(-15, -48, 30, 5); ctx.fillStyle = '#ffd54a'; ctx.fillRect(-3, -48, 6, 5);
-    // yaka
-    ctx.fillStyle = skin; ctx.beginPath(); ctx.moveTo(-6, -86); ctx.lineTo(6, -86); ctx.lineTo(0, -78); ctx.closePath(); ctx.fill();
-    // --- Kollar (omuz -> dirsek -> el) ---
-    for (const [side, a] of [[-1, armL], [1, armR]]) {
-      const shx = side * 14, shy = -80;
-      const ang = armsUp ? -Math.PI / 2 - side * 0.15 * (1 - armsUp) : Math.PI / 2 + a * side;
-      const ex = shx + Math.cos(ang) * 18 * (armsUp ? 1 : side), ey = shy + Math.sin(ang) * 18;
-      const hx2 = ex + Math.cos(ang - 0.4 * side) * 16 * (armsUp ? 1 : side), hy2 = ey + Math.sin(ang - 0.4 * side) * 16;
-      ctx.strokeStyle = shirtD; ctx.lineWidth = 9; ctx.beginPath(); ctx.moveTo(shx, shy); ctx.lineTo(ex, ey); ctx.stroke();
-      ctx.strokeStyle = skin; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(hx2, hy2); ctx.stroke();
-      ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(hx2, hy2, 5, 0, Math.PI * 2); ctx.fill();
-    }
-    // --- Boyun ve kafa ---
-    ctx.fillStyle = skinD; ctx.fillRect(-4, -94, 8, 10);
-    ctx.fillStyle = skin; ctx.beginPath(); ctx.ellipse(0, -106, 13, 15, 0, 0, Math.PI * 2); ctx.fill();
-    // kulak
-    ctx.fillStyle = skinD; ctx.beginPath(); ctx.arc(-11, -106, 3.5, 0, Math.PI * 2); ctx.fill();
-    // saç
-    ctx.fillStyle = hair; ctx.beginPath(); ctx.ellipse(0, -114, 13.5, 9, 0, Math.PI, 0); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(-13, -112); ctx.quadraticCurveTo(-6, -120, 4, -118); ctx.quadraticCurveTo(10, -121, 14, -112); ctx.lineTo(13, -108); ctx.quadraticCurveTo(4, -112, -12, -108); ctx.closePath(); ctx.fill();
-    // yüz
-    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(5, -106, 3.2, 2.6, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#1a1a22'; ctx.beginPath(); ctx.arc(6, -106, 1.6, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = hair; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(2, -111); ctx.lineTo(9, -111.5); ctx.stroke();
+
+    const HIP = -48, L1 = 24, L2 = 24;
+    const leg = (hx, thigh, knee, color, shoeCol) => {
+      const kx = hx + Math.sin(thigh) * L1, ky = HIP + Math.cos(thigh) * L1;
+      const a2 = thigh - knee;
+      const fx = kx + Math.sin(a2) * L2, fy = ky + Math.cos(a2) * L2;
+      ctx.strokeStyle = color; ctx.lineWidth = 11;
+      ctx.beginPath(); ctx.moveTo(hx, HIP); ctx.lineTo(kx, ky); ctx.lineTo(fx, fy); ctx.stroke();
+      ctx.save(); ctx.translate(fx, fy); ctx.rotate(-a2 * 0.3);
+      ctx.fillStyle = shoeCol; ctx.beginPath(); ctx.roundRect(-8, -4, 20, 9, 4); ctx.fill();
+      ctx.fillStyle = '#e8e8e8'; ctx.fillRect(-8, 3, 20, 2);
+      ctx.restore();
+    };
+    const arm = (shx, a, elbow, sleeve, skinC) => {
+      const ex = shx + Math.sin(a) * 18, ey = -82 + Math.cos(a) * 18;
+      const a2 = a + elbow;
+      const hx2 = ex + Math.sin(a2) * 16, hy2 = ey + Math.cos(a2) * 16;
+      ctx.strokeStyle = sleeve; ctx.lineWidth = 9; ctx.beginPath(); ctx.moveTo(shx, -82); ctx.lineTo(ex, ey); ctx.stroke();
+      ctx.strokeStyle = skinC; ctx.lineWidth = 7.5; ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(hx2, hy2); ctx.stroke();
+      ctx.fillStyle = skinC; ctx.beginPath(); ctx.arc(hx2, hy2, 5, 0, Math.PI * 2); ctx.fill();
+    };
+
+    // arka bacak + arka kol (koyu)
+    leg(-4, thighL, kneeL, C.pantsD, '#101016');
+    arm(-11, armL, elbowL, C.shirtD, C.skinD);
+    // gövde
+    const tg = ctx.createLinearGradient(-14, -88, 14, -46);
+    tg.addColorStop(0, C.shirt); tg.addColorStop(1, C.shirtD);
+    ctx.fillStyle = tg; ctx.beginPath(); ctx.roundRect(-15, -90, 30, 46, 9); ctx.fill();
+    ctx.fillStyle = '#1b1b24'; ctx.fillRect(-15, -52, 30, 5); ctx.fillStyle = '#ffd54a'; ctx.fillRect(-3, -52, 6, 5);
+    ctx.fillStyle = C.skin; ctx.beginPath(); ctx.moveTo(-6, -90); ctx.lineTo(6, -90); ctx.lineTo(0, -82); ctx.closePath(); ctx.fill();
+    // ön bacak + ön kol
+    leg(4, thighR, kneeR, C.pants, C.shoe);
+    arm(11, armR, elbowR, C.shirt, C.skin);
+    // boyun ve kafa
+    ctx.save(); ctx.translate(0, -92); ctx.rotate(headTilt);
+    ctx.fillStyle = C.skinD; ctx.fillRect(-4, -4, 8, 8);
+    ctx.fillStyle = C.skin; ctx.beginPath(); ctx.ellipse(0, -16, 13, 15, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = C.skinD; ctx.beginPath(); ctx.arc(-11, -16, 3.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = C.hair; ctx.beginPath(); ctx.ellipse(0, -24, 13.5, 9, 0, Math.PI, 0); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-13, -22); ctx.quadraticCurveTo(-6, -30, 4, -28); ctx.quadraticCurveTo(10, -31, 14, -22); ctx.lineTo(13, -18); ctx.quadraticCurveTo(4, -22, -12, -18); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(5, -16, 3.2, 2.6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#1a1a22'; ctx.beginPath(); ctx.arc(6, -16, 1.6, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = C.hair; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(2, -21); ctx.lineTo(9, -21.5); ctx.stroke();
     ctx.strokeStyle = '#b5745a'; ctx.lineWidth = 1.4; ctx.beginPath();
-    if (f) { ctx.arc(5, -97, 3, Math.PI, 0); } else { ctx.arc(5, -100, 3.5, 0.2, Math.PI - 0.6); }
+    if (f) ctx.arc(5, -7, 3, Math.PI, 0); else if (cheer) ctx.arc(4, -11, 4.5, 0.1, Math.PI - 0.3); else ctx.arc(5, -10, 3.5, 0.2, Math.PI - 0.6);
     ctx.stroke();
-    // kulaklık / bandana detayı (casino tarzı altın küpe)
-    ctx.fillStyle = '#ffd54a'; ctx.beginPath(); ctx.arc(-11, -102, 1.6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffd54a'; ctx.beginPath(); ctx.arc(-11, -12, 1.6, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
     ctx.restore();
   }
 
-  function nearestGroundY() {
-    if (anim.wx < geo.start.w + 20) return 0;
-    let best = geo.segs[0]?.y ?? 0, bd = Infinity;
-    for (const s of geo.segs) { const d = Math.abs(s.cx - anim.wx); if (d < bd) { bd = d; best = s.y; } }
-    if (geo.finish && anim.wx > geo.finish.x) return geo.finish.y;
-    return best;
-  }
-
   // ---------- HUD ----------
-  function drawHUD(dt) {
-    anim.counter.shown += (anim.counter.target - anim.counter.shown) * Math.min(1, dt * 6);
-    if (!state.playing && !anim.fail) {
-      ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.font = 'bold 20px Inter, sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('Bahis yap · çarpanlar gökten düşsün · düşmeden Cash Out yap', W / 2, 56);
+  function drawHUD() {
+    ctx.textAlign = 'center';
+    if (!state.playing && !anim.fail && anim.celebrate <= 0) {
+      ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.font = 'bold 18px Inter, sans-serif';
+      ctx.fillText('Bahis yap · kalasta yürü · çarpan şimşekle gelsin · düşmeden Cash Out yap', W / 2, 60);
       return;
     }
-    const m = anim.counter.shown, tier = E.tierOf(Math.max(1, m));
-    ctx.textAlign = 'center';
+    const m = anim.counter.shown, T = TIERS[E.tierOf(Math.max(1, m))];
     ctx.font = '900 54px Inter, sans-serif';
     const g = ctx.createLinearGradient(0, 30, 0, 80);
-    g.addColorStop(0, TIERS[tier].text[0]); g.addColorStop(1, TIERS[tier].text[1]);
-    ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.strokeText(m.toFixed(2) + '×', W / 2, 72);
-    ctx.fillStyle = g; ctx.fillText(m.toFixed(2) + '×', W / 2, 72);
-    ctx.fillStyle = '#c9d3e6'; ctx.font = '600 15px Inter, sans-serif';
+    g.addColorStop(0, T.text[0]); g.addColorStop(1, T.text[1]);
+    ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.strokeText(m.toFixed(2) + '×', W / 2, 74);
+    ctx.fillStyle = g; ctx.fillText(m.toFixed(2) + '×', W / 2, 74);
+    ctx.fillStyle = '#c9d3e6'; ctx.font = '600 14px Inter, sans-serif';
     ctx.fillText(`Bahis ${fmt(state.bet)} · Olası kazanç ${fmt(E.payout(state.bet, currentMultiplier()))}`, W / 2, 100);
   }
 
@@ -883,24 +896,17 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
   // ---------- Ana döngü ----------
   let last = performance.now();
   function loop(now) {
-    const dt = Math.min(0.05, (now - last) / 1000); last = now; anim.time += dt;
-
-    updateBadges(dt); updateWalker(dt); updateParticles(dt);
-
-    // kamera: adamı yatayda %38'de, düşeyde zemin çizgisinde tut
-    const camTX = Math.max(0, anim.wx - W * 0.38);
-    const camTY = anim.fail ? anim.cam.y : anim.wy * 0.85;
-    anim.cam.x += (camTX - anim.cam.x) * Math.min(1, dt * 4);
-    anim.cam.y += (camTY - anim.cam.y) * Math.min(1, dt * 4);
-    anim.shake = Math.max(0, anim.shake - dt * 30);
-
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    update(dt);
     ctx.save();
     if (anim.shake > 0) ctx.translate((Math.random() - 0.5) * anim.shake, (Math.random() - 0.5) * anim.shake);
     drawBackground(); drawStage();
-    for (const b of anim.badges) if (b.state !== 'wait') drawBadge(b);
+    for (let i = 0; i < state.track.length; i++) drawBadge(i);
+    if (anim.bolt) drawBolt(anim.bolt);
     drawWalker(); drawParticles();
     ctx.restore();
-    drawHUD(dt);
+    if (anim.flash > 0) { ctx.fillStyle = `rgba(220,235,255,${anim.flash * 0.55})`; ctx.fillRect(0, 0, W, H); }
+    drawHUD();
     requestAnimationFrame(loop);
   }
 
@@ -918,14 +924,7 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
     if (e.key === 'c' || e.key === 'C') cashOut(false);
   });
 
-  // Başlangıç: örnek bir parkur göster (bahis yapılmadan)
-  (async () => {
-    const demo = await E.createRound(hmacHex, 'demo', 'demo', 1);
-    state.track = demo.track; buildGeometry(demo.track);
-    anim.badges = geo.segs.map((seg, i) => ({ seg, x: seg.cx, y: seg.y - BADGE_LIFT, targetY: seg.y - BADGE_LIFT, vy: 0, state: 'rest', delay: 0, t: 0, bob: i, scale: 1 }));
-    state.track = []; // demo parkuru önizlemede göstermeyelim
-    await showSeedHash(); refreshUI();
-  })();
+  showSeedHash(); refreshUI();
   requestAnimationFrame(loop);
 })();
 

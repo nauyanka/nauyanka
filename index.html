@@ -8,50 +8,51 @@
 </head>
 <body>
 <div class="app">
-  <aside class="panel">
-    <div class="brand">PLANK<span>WALKER</span></div>
-
-    <div class="balance">
-      <span>Bakiye</span>
-      <strong id="balance">$1,000.00</strong>
-    </div>
-
-    <label class="field">
-      <span>Bahis Miktarı</span>
-      <div class="input-row">
-        <input id="bet" type="number" min="0.1" step="0.1" value="10">
-        <button data-bet="half">½</button>
-        <button data-bet="double">2×</button>
-      </div>
-    </label>
-
-    <button id="btn-bet" class="btn primary">BAHİS YAP</button>
-    <button id="btn-step" class="btn step" disabled>ADIM AT</button>
-    <button id="btn-cashout" class="btn cashout" disabled>CASH OUT <span id="cashout-amount"></span></button>
-
-    <div class="stats">
-      <div><span>Mevcut Çarpan</span><strong id="cur-mult">1.00×</strong></div>
-      <div><span>Sonraki</span><strong id="next-mult">—</strong></div>
-      <div><span>Geçiş Şansı</span><strong id="next-chance">—</strong></div>
-    </div>
-    <div class="track-preview" id="track-preview"></div>
-
-    <details class="fair">
-      <summary>Provably Fair</summary>
-      <div class="fair-row"><span>Server Seed Hash</span><code id="seed-hash">—</code></div>
-      <div class="fair-row"><span>Client Seed</span><input id="client-seed" type="text" value="plank-walker"></div>
-      <div class="fair-row"><span>Nonce</span><code id="nonce">0</code></div>
-      <div class="fair-row"><span>Son Server Seed</span><code id="revealed-seed">—</code></div>
-      <p>Her turun parkuru (kalas sayısı, çarpanlar, yükseklikler) ve adım zarları aynı seed'den üretilir. Kasa avantajı %4 (RTP %96). Hangi kalasta cash out yaparsan yap beklenen getiri aynıdır.</p>
-    </details>
-
-    <div class="history" id="history"></div>
-  </aside>
-
   <main class="stage">
     <canvas id="game"></canvas>
+    <div class="brand">PLANK<span>WALKER</span></div>
+    <div class="balance"><span>Bakiye</span><strong id="balance">$1,000.00</strong></div>
     <div id="toast" class="toast"></div>
   </main>
+
+  <section class="dock">
+    <div class="dock-col bet-col">
+      <label class="field">
+        <span>Bahis Miktarı</span>
+        <div class="input-row">
+          <input id="bet" type="number" min="0.1" step="0.1" value="10">
+          <button data-bet="half">½</button>
+          <button data-bet="double">2×</button>
+        </div>
+      </label>
+      <div class="history" id="history"></div>
+    </div>
+
+    <div class="dock-col action-col">
+      <button id="btn-bet" class="btn primary">BAHİS YAP</button>
+      <div class="round-actions">
+        <button id="btn-step" class="btn step" disabled>YÜRÜ</button>
+        <button id="btn-cashout" class="btn cashout" disabled>CASH OUT <span id="cashout-amount"></span></button>
+      </div>
+    </div>
+
+    <div class="dock-col stats-col">
+      <div class="stats">
+        <div><span>Mevcut Çarpan</span><strong id="cur-mult">1.00×</strong></div>
+        <div><span>Olası Kazanç</span><strong id="potential">$0.00</strong></div>
+        <div><span>Kalan Kalas</span><strong id="remaining">—</strong></div>
+      </div>
+      <div class="track-preview" id="track-preview"></div>
+      <details class="fair">
+        <summary>Provably Fair</summary>
+        <div class="fair-row"><span>Server Seed Hash</span><code id="seed-hash">—</code></div>
+        <div class="fair-row"><span>Client Seed</span><input id="client-seed" type="text" value="plank-walker"></div>
+        <div class="fair-row"><span>Nonce</span><code id="nonce">0</code></div>
+        <div class="fair-row"><span>Son Server Seed</span><code id="revealed-seed">—</code></div>
+        <p>Parkur (kalas sayısı ve gizli çarpanlar) ile adım zarları aynı seed'den üretilir. Kasa avantajı %4 (RTP %96). Hangi kalasta cash out yaparsan yap beklenen getiri aynıdır.</p>
+      </details>
+    </div>
+  </section>
 </div>
 
 <script src="src/engine.js"></script>

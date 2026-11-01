@@ -15,13 +15,14 @@ Ya da `index.html` dosyasını doğrudan tarayıcıda aç.
 
 | Tuş | İşlev |
 |-----|-------|
-| Boşluk | Bahis yap / Adım at |
+| Boşluk | Bahis yap / Yürü |
 | C | Cash out |
 
 ## Mekanik
 
-- Her tur **rastgele parkur**: 8–14 kalas, çarpanlar küçükten büyüğe (1.2× … 10000×), kalaslar farklı yüksekliklerde ve aralıklı. Adam aynı seviyeye zıplar, aşağı atlar, yukarı tırmanır.
-- Tur başında çarpanlar gökten kanatlı madalyonlar halinde düşer. Çarpan büyüdükçe madalyonun rengi değişir: yeşil → mavi → mor → ateş → altın → elmas (100×+).
+- Her tur **rastgele parkur**: 8–14 kalas, çarpanlar küçükten büyüğe (1.2× … 10000×). Çarpanlar **gizlidir**; her kalasın üstünde "?" madalyonu durur.
+- Adam kalasta normal yürür. Kalasa basınca gökten **şimşek** çakar ve çarpan sürpriz olarak kanatlı madalyon halinde düşer. Çarpan büyüdükçe madalyonun rengi değişir: yeşil → mavi → mor → ateş → altın → elmas (100×+).
+- Şimşek bazen kötü haber getirir: adam kayar ya da kalas kırılır, bahis gider.
 - Kasa avantajı %4 → **RTP %96**. i. kalasa ulaşma olasılığı `0.96 / çarpan(i)` olduğu için hangi noktada cash out yaparsan yap beklenen getiri sabittir. Büyük çarpan sıçraması = düşük geçiş şansı.
 - **Provably fair**: tur başlamadan server seed'in SHA-256 hash'i gösterilir; parkur ve adım zarları `HMAC-SHA256(serverSeed, clientSeed:nonce:round)` ile üretilir; tur bitince seed açıklanır.
 
