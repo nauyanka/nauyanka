@@ -132,7 +132,7 @@ input:disabled { opacity: .6; }
       <div class="stats">
         <div><span>Mevcut Çarpan</span><strong id="cur-mult">1.00×</strong></div>
         <div><span>Olası Kazanç</span><strong id="potential">$0.00</strong></div>
-        <div><span>Kalan Kalas</span><strong id="remaining">—</strong></div>
+        <div><span>Yürünen Kalas</span><strong id="remaining">—</strong></div>
       </div>
       <div class="track-preview" id="track-preview"></div>
       <details class="fair">
@@ -141,7 +141,7 @@ input:disabled { opacity: .6; }
         <div class="fair-row"><span>Client Seed</span><input id="client-seed" type="text" value="plank-walker"></div>
         <div class="fair-row"><span>Nonce</span><code id="nonce">0</code></div>
         <div class="fair-row"><span>Son Server Seed</span><code id="revealed-seed">—</code></div>
-        <p>Parkur (kalas sayısı ve gizli çarpanlar) ile adım zarları aynı seed'den üretilir. Kasa avantajı %4 (RTP %96). Hangi kalasta cash out yaparsan yap beklenen getiri aynıdır.</p>
+        <p>Kalas sonsuzdur; her kalasın gizli çarpanı ve adım zarı aynı seed'den sırayla üretilir. Kasa avantajı %4 (RTP %96). Hangi kalasta cash out yaparsan yap beklenen getiri aynıdır.</p>
       </details>
     </div>
   </section>
@@ -152,24 +152,22 @@ input:disabled { opacity: .6; }
 /**
  * Plank Walker — oyun motoru (saf mantık, UI yok). Tarayıcı + Node.
  *
- * Her tur rastgele bir parkur üretilir (segment sayısı, çarpanlar, yükseklikler).
- * Parkur ve adım zarları aynı provably-fair akıştan gelir; oyuncu seed'lerle doğrulayabilir.
+ * Kalas SONSUZDUR. Segmentler lazım oldukça aynı provably-fair akıştan üretilir;
+ * oyuncu seed'lerle her segmenti doğrulayabilir.
  *
  * Adalet: i. segmente ulaşma olasılığı P(i) = (1 - HOUSE_EDGE) / M(i).
  * Böylece oyuncu nerede cash out yaparsa yapsın beklenen getiri sabittir (RTP %96).
  * Adım hayatta kalma olasılığı S(i) = P(i) / P(i-1) = M(i-1) / M(i).
+ * Boş kalaslarda M değişmez → risk yok; risk çarpan düşen kalaslarda toplanır.
  */
 
 const HOUSE_EDGE = 0.04;
-const TRACK_ROLLS = 24;   // parkur üretimi için ayrılan zar sayısı
-const MAX_SEGMENTS = 18;
-const MIN_SEGMENTS = 12;
-const MAX_MULTIPLIER = 1000;
+const MAX_MULTIPLIER = 5000;   // bu toplama ulaşınca tur otomatik ödenir
 
 /**
  * Kalas bonusu tablosu: [değer, olasılık].
- * 1 = boş kalas (çarpan yok, risk yok). Çoğu kalas boş geçilir;
- * çıkan çarpanlar genelde 1.5×–4×, nadiren 10×/20×, çok nadiren 50×.
+ * 1 = boş kalas. Çoğu kalas boş geçilir; çıkan çarpanlar genelde 1.5×–4×,
+ * nadiren 10×/20×, çok nadiren 50×.
  */
 const BONUS_TABLE = [
   [1, 0.60], [1.5, 0.16], [2, 0.12], [3, 0.06], [4, 0.03],
@@ -184,66 +182,43 @@ function pickBonus(r) {
 const round2 = (n) => Math.round(n * 100) / 100;
 
 /**
- * Rastgele parkur üret. rolls[0..TRACK_ROLLS) kullanılır.
- * Dönen segmentler: { index, bonus, multiplier, survive, reach }
- *  - bonus: bu kalasta düşen çarpan (1 = boş)
- *  - multiplier: buraya kadar biriken toplam çarpan (bonusların çarpımı)
- * Boş kalaslarda toplam değişmediği için geçiş riski yoktur; risk,
- * çarpan düşen kalaslarda (şimşek anında) toplanır.
+ * Bir tur: sonsuz, tembel üretilen segment akışı.
+ * Zar k = HMAC-SHA256(serverSeed, `${clientSeed}:${nonce}:${floor(k/8)}`) içindeki (k%8). 4 bayt.
+ * Segment j: bonus zarı = zar[2j], adım zarı = zar[2j+1].
  */
-function generateTrack(rolls) {
-  if (rolls.length < TRACK_ROLLS) throw new Error('Parkur için yetersiz zar');
-  const count = MIN_SEGMENTS + Math.floor(rolls[0] * (MAX_SEGMENTS - MIN_SEGMENTS + 1));
-  const bonuses = [];
-  for (let i = 0; i < count; i++) bonuses.push(pickBonus(rolls[1 + i]));
-  if (bonuses.every((b) => b === 1)) bonuses[count - 1] = 2; // tamamen boş parkur olmasın
-
-  const segments = [];
-  let mult = 1, prevReach = 1;
-  for (let i = 0; i < count; i++) {
-    mult = Math.min(MAX_MULTIPLIER, round2(mult * bonuses[i]));
-    const reach = (1 - HOUSE_EDGE) / mult;
-    const survive = Math.min(1, reach / prevReach);
-    prevReach = reach;
-    segments.push({ index: i + 1, bonus: bonuses[i], multiplier: mult, survive, reach });
-    if (mult >= MAX_MULTIPLIER) break;
+class Round {
+  constructor(hmacHex, serverSeed, clientSeed, nonce) {
+    Object.assign(this, { hmacHex, serverSeed, clientSeed, nonce });
+    this.rolls = []; this.segments = [];
+    this.mult = 1; this.prevReach = 1;
   }
-  return segments;
-}
-
-/**
- * Provably fair: HMAC-SHA256(serverSeed, clientSeed:nonce:round) → [0,1) sayılar.
- * hmacHex dışarıdan verilir (WebCrypto veya Node crypto).
- */
-async function generateRolls(hmacHex, serverSeed, clientSeed, nonce, count) {
-  const rolls = [];
-  let round = 0;
-  while (rolls.length < count) {
-    const hex = await hmacHex(serverSeed, `${clientSeed}:${nonce}:${round}`);
-    for (let i = 0; i + 8 <= hex.length && rolls.length < count; i += 8) {
-      rolls.push(parseInt(hex.slice(i, i + 8), 16) / 0x100000000);
+  async roll(k) {
+    while (this.rolls.length <= k) {
+      const chunk = this.rolls.length / 8;
+      const hex = await this.hmacHex(this.serverSeed, `${this.clientSeed}:${this.nonce}:${chunk}`);
+      for (let i = 0; i + 8 <= hex.length; i += 8) this.rolls.push(parseInt(hex.slice(i, i + 8), 16) / 0x100000000);
     }
-    round++;
+    return this.rolls[k];
   }
-  return rolls;
+  /** i. segment (0 tabanlı). { index, bonus, multiplier, survive, fell, stepRoll } */
+  async segment(i) {
+    while (this.segments.length <= i) {
+      const j = this.segments.length;
+      const bonus = pickBonus(await this.roll(2 * j));
+      const stepRoll = await this.roll(2 * j + 1);
+      this.mult = Math.min(MAX_MULTIPLIER, round2(this.mult * bonus));
+      const reach = (1 - HOUSE_EDGE) / this.mult;
+      const survive = Math.min(1, reach / this.prevReach);
+      this.prevReach = reach;
+      this.segments.push({ index: j + 1, bonus, multiplier: this.mult, survive, fell: stepRoll >= survive, stepRoll });
+    }
+    return this.segments[i];
+  }
+  /** Doğrulama / test: ilk n segmenti üret. */
+  async take(n) { await this.segment(n - 1); return this.segments.slice(0, n); }
 }
 
-/** Tam tur: parkur + adım sonuçları. */
-async function createRound(hmacHex, serverSeed, clientSeed, nonce) {
-  const rolls = await generateRolls(hmacHex, serverSeed, clientSeed, nonce, TRACK_ROLLS + MAX_SEGMENTS);
-  const track = generateTrack(rolls);
-  const stepRolls = rolls.slice(TRACK_ROLLS, TRACK_ROLLS + track.length);
-  const { fallAt } = resolveRound(track, stepRolls);
-  return { track, stepRolls, fallAt };
-}
-
-/** Adam hangi segmente geçerken düşer? fallAt === track.length → hiç düşmez. */
-function resolveRound(track, stepRolls) {
-  for (let i = 0; i < track.length; i++) {
-    if (stepRolls[i] >= track[i].survive) return { fallAt: i };
-  }
-  return { fallAt: track.length };
-}
+function createRound(hmacHex, serverSeed, clientSeed, nonce) { return new Round(hmacHex, serverSeed, clientSeed, nonce); }
 
 /** Kayma mı, kalas kırılması mı? Sadece görsel. */
 function failStyle(roll) { return roll > 0.5 ? 'slip' : 'break'; }
@@ -253,7 +228,7 @@ function payout(bet, multiplier) { return Math.floor(bet * multiplier * 100) / 1
 /** Çarpan büyüklüğüne göre görsel kademe (0 = en düşük, 5 = efsanevi). */
 function tierOf(m) { return m < 2 ? 0 : m < 3 ? 1 : m < 5 ? 2 : m < 10 ? 3 : m < 50 ? 4 : 5; }
 
-const api = { HOUSE_EDGE, TRACK_ROLLS, MIN_SEGMENTS, MAX_SEGMENTS, BONUS_TABLE, generateTrack, generateRolls, createRound, resolveRound, failStyle, payout, tierOf };
+const api = { HOUSE_EDGE, MAX_MULTIPLIER, BONUS_TABLE, Round, createRound, failStyle, payout, tierOf };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 if (typeof window !== 'undefined') window.PlankEngine = api;
 
@@ -277,8 +252,7 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
   // ---------- Sabitler ----------
   const SEG_W = 170;         // bir kalas bölümünün uzunluğu
   const START_W = 240;       // başlangıç platformu
-  const FINISH_W = 260;
-  const BADGE_LIFT = 195;    // madalyonun kalas üstünden yüksekliği
+  const BADGE_LIFT = 215;    // madalyonun kalas üstünden yüksekliği
   const WALK_SPEED = 150;    // px/sn
   const PLANK_H = 22;
 
@@ -297,7 +271,8 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
   // ---------- Durum ----------
   const state = {
     balance: 1000, bet: 10,
-    track: [], stepRolls: [], fallAt: -1,
+    round: null,            // E.Round — sonsuz, tembel segment akışı
+    track: [],              // şimdiye kadar üretilen segmentler (round.segments)
     position: 0,            // 0 = başlangıç platformu, i = i. kalas
     playing: false, busy: false,
     serverSeed: randomSeed(), nonce: 0,
@@ -305,7 +280,13 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
   };
 
   const segCenter = (i) => START_W + i * SEG_W + SEG_W / 2;   // i: 0 tabanlı kalas indeksi
-  const plankEnd = () => START_W + state.track.length * SEG_W;
+  // Madalyon durumu kalas başına; sonsuz parkur için lazım oldukça oluşturulur
+  const badgeAt = (i) => (anim.badges[i] ??= { state: 'hidden', y: -BADGE_LIFT, t: 0, bob: i * 1.3 });
+  const visibleRange = () => {
+    const first = Math.max(0, Math.floor((anim.camX - START_W) / SEG_W) - 1);
+    const last = Math.ceil((anim.camX + W - START_W) / SEG_W) + 1;
+    return [first, last];
+  };
 
   // ---------- Animasyon ----------
   const anim = {
@@ -359,17 +340,19 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
     ui.balance.textContent = fmt(state.balance);
     ui.curMult.textContent = currentMultiplier().toFixed(2) + '×';
     ui.potential.textContent = state.playing ? fmt(E.payout(state.bet, currentMultiplier())) : '$0.00';
-    ui.remaining.textContent = state.playing ? String(state.track.length - state.position) : '—';
+    ui.remaining.textContent = state.playing ? String(state.position) : '—';
     const inRound = state.playing && !state.busy;
     ui.btnBet.disabled = state.playing;
     ui.btnBet.hidden = state.playing;
-    ui.btnStep.disabled = !inRound || state.position >= state.track.length;
+    ui.btnStep.disabled = !inRound;
     ui.btnCash.disabled = !inRound || state.position === 0;
     ui.cashAmt.textContent = state.playing && state.position > 0 ? fmt(E.payout(state.bet, currentMultiplier())) : '';
     ui.bet.disabled = state.playing;
     ui.nonce.textContent = state.nonce;
-    ui.preview.innerHTML = state.track.map((s, i) => {
-      const b = anim.badges[i];
+    const shown = state.track.slice(Math.max(0, state.position - 11), state.position + 1);
+    const offset = Math.max(0, state.position - 11);
+    ui.preview.innerHTML = shown.map((s, k) => {
+      const i = offset + k, b = anim.badges[i];
       const dead = b && b.state === 'dead';
       const revealed = i < state.position || dead;
       const cls = dead ? 'dead' : i < state.position ? (s.bonus > 1 ? 'done' : 'empty') : i === state.position && state.playing ? 'cur' : '';
@@ -403,39 +386,38 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
     state.bet = Math.round(bet * 100) / 100;
     state.balance -= state.bet;
     state.nonce += 1;
-    const round = await E.createRound(hmacHex, state.serverSeed, ui.clientSeed.value || 'plank-walker', state.nonce);
-    state.track = round.track; state.stepRolls = round.stepRolls; state.fallAt = round.fallAt;
+    state.round = E.createRound(hmacHex, state.serverSeed, ui.clientSeed.value || 'plank-walker', state.nonce);
+    state.track = state.round.segments;
     state.position = 0; state.playing = true; state.busy = false;
 
     anim.wx = START_W / 2; anim.wy = 0; anim.phase = 0;
     anim.walk = null; anim.strike = null; anim.bolt = null; anim.fail = null; anim.debris = []; anim.particles = []; anim.floaters = [];
     anim.counter = { shown: 1, target: 1 }; anim.celebrate = 0;
-    anim.badges = state.track.map((_, i) => ({ state: 'hidden', y: -BADGE_LIFT, t: 0, bob: i * 1.3 }));
+    anim.badges = [];
     refreshUI();
   }
 
-  function step() {
+  async function step() {
     if (!state.playing || state.busy) return;
     const i = state.position;
-    if (i >= state.track.length) return;
     state.busy = true; refreshUI();
+    const seg = await state.round.segment(i); // segment seed'den lazım oldukça üretilir
     const to = segCenter(i);
     anim.walk = {
       from: anim.wx, to, t: 0, dur: Math.abs(to - anim.wx) / WALK_SPEED,
       onDone: () => {
         anim.wx = to;
-        const seg = state.track[i], fail = state.fallAt === i;
         // Boş kalaslarda gerilim kısa; çarpan ya da düşüş varsa uzun
-        anim.strike = { seg: i, t: 0, x: to, fail, delay: fail || seg.bonus > 1 ? 0.75 : 0.35 };
+        anim.strike = { seg: i, t: 0, x: to, fail: seg.fell, delay: seg.fell || seg.bonus > 1 ? 0.75 : 0.35 };
       },
     };
   }
 
   // Şimşek çarpar, çarpan açıklanır (ya da adam düşer)
   function resolveStrike(s) {
-    const i = s.seg, seg = state.track[i], badge = anim.badges[i];
+    const i = s.seg, seg = state.track[i], badge = badgeAt(i);
     if (s.fail) {
-      const style = E.failStyle(state.stepRolls[i]);
+      const style = E.failStyle(seg.stepRoll);
       badge.state = 'dead'; badge.t = 0;
       anim.fail = { style, t: 0, x0: anim.wx };
       anim.shake = 14;
@@ -448,7 +430,6 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
       badge.state = 'empty'; badge.t = 0;
       anim.floaters.push({ x: anim.wx, y: -BADGE_LIFT, t: 0, text: 'BOŞ' });
       burst(anim.wx, -BADGE_LIFT, '#6b8fb0', 12);
-      if (state.position === state.track.length) { setTimeout(() => cashOut(true), 700); return; }
       setTimeout(() => { if (state.playing) { state.busy = false; refreshUI(); } }, 250);
     } else {
       state.position = i + 1;
@@ -456,7 +437,7 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
       anim.counter.target = seg.multiplier;
       anim.celebrate = 0.9;
       anim.shake = 6 + E.tierOf(seg.bonus) * 2;
-      if (state.position === state.track.length) { setTimeout(() => cashOut(true), 900); return; }
+      if (seg.multiplier >= E.MAX_MULTIPLIER) { toast('Maksimum çarpan! Otomatik ödeme', 'win'); setTimeout(() => cashOut(true), 900); return; }
       setTimeout(() => { if (state.playing) { state.busy = false; refreshUI(); } }, 450);
     }
     refreshUI();
@@ -557,7 +538,7 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
       if (!s.hit && s.t >= s.delay) {
         s.hit = true;
         if (s.fail || state.track[s.seg].bonus > 1) {
-          anim.bolt = makeBolt(sx(s.x), -20, s.fail && E.failStyle(state.stepRolls[s.seg]) === 'break' ? sy(0) : sy(-BADGE_LIFT));
+          anim.bolt = makeBolt(sx(s.x), -20, s.fail && E.failStyle(state.track[s.seg].stepRoll) === 'break' ? sy(0) : sy(-BADGE_LIFT));
           anim.flash = 1;
         }
         resolveStrike(s);
@@ -569,6 +550,7 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
     anim.celebrate = Math.max(0, anim.celebrate - dt);
     // madalyonlar
     for (const b of anim.badges) {
+      if (!b) continue;
       b.t += dt;
       if (b.state === 'empty') continue;
       if (b.state === 'drop') {
@@ -693,23 +675,20 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
   }
 
   function drawStage() {
-    const n = state.track.length;
+    const [first, last] = visibleRange();
+    const brokenIdx = anim.fail && anim.fail.style === 'break' ? state.position : -1;
+    for (let i = first; i <= last; i++) {
+      if (i === brokenIdx) continue;
+      drawPlankSegment(START_W + i * SEG_W, SEG_W, 0, 0, false);
+    }
+    for (let i = first; i <= last + 1; i++) drawRope(START_W + i * SEG_W);
+    for (const d of anim.debris) drawPlankSegment(d.x, d.w, d.y, d.rot, true);
     drawPlatform(0, START_W, 'BAŞLANGIÇ', ['#4a6a82', '#2a3f52']);
-    if (n > 0) {
-      const brokenIdx = anim.fail && anim.fail.style === 'break' ? state.position : -1;
-      for (let i = 0; i < n; i++) {
-        if (i === brokenIdx) continue;
-        drawPlankSegment(START_W + i * SEG_W, SEG_W, 0, 0, false);
-      }
-      for (let i = 0; i <= n; i++) drawRope(START_W + i * SEG_W);
-      for (const d of anim.debris) drawPlankSegment(d.x, d.w, d.y, d.rot, true);
-      // numaralar
-      ctx.font = 'bold 12px Inter, sans-serif'; ctx.textAlign = 'center';
-      for (let i = 0; i < n; i++) {
-        ctx.fillStyle = i < state.position ? 'rgba(0,231,1,.75)' : 'rgba(255,255,255,.3)';
-        ctx.fillText(String(i + 1), sx(segCenter(i)), sy(0) + 44);
-      }
-      drawPlatform(plankEnd(), FINISH_W, 'BİTİŞ · TAM ÖDEME', ['#5a4a1a', '#2a2410']);
+    // numaralar
+    ctx.font = 'bold 12px Inter, sans-serif'; ctx.textAlign = 'center';
+    for (let i = first; i <= last; i++) {
+      ctx.fillStyle = i < state.position ? 'rgba(0,231,1,.75)' : 'rgba(255,255,255,.3)';
+      ctx.fillText(String(i + 1), sx(segCenter(i)), sy(0) + 44);
     }
   }
 
@@ -759,9 +738,9 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
   }
 
   function drawBadge(i) {
-    const b = anim.badges[i], seg = state.track[i];
+    const b = badgeAt(i), seg = state.track[i];
     const hidden = b.state === 'hidden' || b.state === 'empty';
-    const tier = E.tierOf(seg.bonus);
+    const tier = seg ? E.tierOf(seg.bonus) : 0;
     const T = b.state === 'dead' ? DEAD : hidden ? MYSTERY : TIERS[tier];
     const key = b.state === 'dead' ? 'dead' : hidden ? 'mystery' : tier;
     const bobY = (hidden || b.state === 'rest') ? Math.sin(anim.time * 2 + b.bob) * 5 : 0;
@@ -793,7 +772,7 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
 
     ctx.scale(s, s);
     ctx.drawImage(badgeSprite(key, T), -130, -130, 260, 260);
-    const label = hidden ? '?' : b.state === 'dead' ? '✕' : bonusLabel(seg.bonus);
+    const label = hidden || !seg ? '?' : b.state === 'dead' ? '✕' : bonusLabel(seg.bonus);
     const fs = hidden ? 54 : label.length > 4 ? 30 : label.length > 3 ? 36 : 42;
     ctx.font = `900 ${fs}px Inter, Arial Black, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
     for (let d = 5; d >= 1; d--) { ctx.fillStyle = T.extrude; ctx.fillText(label, 0, d); }
@@ -1075,7 +1054,7 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
     ctx.save();
     if (anim.shake > 0) ctx.translate((Math.random() - 0.5) * anim.shake, (Math.random() - 0.5) * anim.shake);
     drawBackground(); drawStage();
-    for (let i = 0; i < state.track.length; i++) drawBadge(i);
+    { const [first, last] = visibleRange(); for (let i = first; i <= last; i++) drawBadge(i); }
     if (anim.bolt) drawBolt(anim.bolt);
     drawWalker(); drawParticles(); drawFloaters();
     ctx.restore();

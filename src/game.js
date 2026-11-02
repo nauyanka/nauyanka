@@ -16,8 +16,7 @@
   // ---------- Sabitler ----------
   const SEG_W = 170;         // bir kalas bölümünün uzunluğu
   const START_W = 240;       // başlangıç platformu
-  const FINISH_W = 260;
-  const BADGE_LIFT = 195;    // madalyonun kalas üstünden yüksekliği
+  const BADGE_LIFT = 215;    // madalyonun kalas üstünden yüksekliği
   const WALK_SPEED = 150;    // px/sn
   const PLANK_H = 22;
 
@@ -36,7 +35,8 @@
   // ---------- Durum ----------
   const state = {
     balance: 1000, bet: 10,
-    track: [], stepRolls: [], fallAt: -1,
+    round: null,            // E.Round — sonsuz, tembel segment akışı
+    track: [],              // şimdiye kadar üretilen segmentler (round.segments)
     position: 0,            // 0 = başlangıç platformu, i = i. kalas
     playing: false, busy: false,
     serverSeed: randomSeed(), nonce: 0,
@@ -44,7 +44,13 @@
   };
 
   const segCenter = (i) => START_W + i * SEG_W + SEG_W / 2;   // i: 0 tabanlı kalas indeksi
-  const plankEnd = () => START_W + state.track.length * SEG_W;
+  // Madalyon durumu kalas başına; sonsuz parkur için lazım oldukça oluşturulur
+  const badgeAt = (i) => (anim.badges[i] ??= { state: 'hidden', y: -BADGE_LIFT, t: 0, bob: i * 1.3 });
+  const visibleRange = () => {
+    const first = Math.max(0, Math.floor((anim.camX - START_W) / SEG_W) - 1);
+    const last = Math.ceil((anim.camX + W - START_W) / SEG_W) + 1;
+    return [first, last];
+  };
 
   // ---------- Animasyon ----------
   const anim = {
@@ -98,17 +104,19 @@
     ui.balance.textContent = fmt(state.balance);
     ui.curMult.textContent = currentMultiplier().toFixed(2) + '×';
     ui.potential.textContent = state.playing ? fmt(E.payout(state.bet, currentMultiplier())) : '$0.00';
-    ui.remaining.textContent = state.playing ? String(state.track.length - state.position) : '—';
+    ui.remaining.textContent = state.playing ? String(state.position) : '—';
     const inRound = state.playing && !state.busy;
     ui.btnBet.disabled = state.playing;
     ui.btnBet.hidden = state.playing;
-    ui.btnStep.disabled = !inRound || state.position >= state.track.length;
+    ui.btnStep.disabled = !inRound;
     ui.btnCash.disabled = !inRound || state.position === 0;
     ui.cashAmt.textContent = state.playing && state.position > 0 ? fmt(E.payout(state.bet, currentMultiplier())) : '';
     ui.bet.disabled = state.playing;
     ui.nonce.textContent = state.nonce;
-    ui.preview.innerHTML = state.track.map((s, i) => {
-      const b = anim.badges[i];
+    const shown = state.track.slice(Math.max(0, state.position - 11), state.position + 1);
+    const offset = Math.max(0, state.position - 11);
+    ui.preview.innerHTML = shown.map((s, k) => {
+      const i = offset + k, b = anim.badges[i];
       const dead = b && b.state === 'dead';
       const revealed = i < state.position || dead;
       const cls = dead ? 'dead' : i < state.position ? (s.bonus > 1 ? 'done' : 'empty') : i === state.position && state.playing ? 'cur' : '';
@@ -142,39 +150,38 @@
     state.bet = Math.round(bet * 100) / 100;
     state.balance -= state.bet;
     state.nonce += 1;
-    const round = await E.createRound(hmacHex, state.serverSeed, ui.clientSeed.value || 'plank-walker', state.nonce);
-    state.track = round.track; state.stepRolls = round.stepRolls; state.fallAt = round.fallAt;
+    state.round = E.createRound(hmacHex, state.serverSeed, ui.clientSeed.value || 'plank-walker', state.nonce);
+    state.track = state.round.segments;
     state.position = 0; state.playing = true; state.busy = false;
 
     anim.wx = START_W / 2; anim.wy = 0; anim.phase = 0;
     anim.walk = null; anim.strike = null; anim.bolt = null; anim.fail = null; anim.debris = []; anim.particles = []; anim.floaters = [];
     anim.counter = { shown: 1, target: 1 }; anim.celebrate = 0;
-    anim.badges = state.track.map((_, i) => ({ state: 'hidden', y: -BADGE_LIFT, t: 0, bob: i * 1.3 }));
+    anim.badges = [];
     refreshUI();
   }
 
-  function step() {
+  async function step() {
     if (!state.playing || state.busy) return;
     const i = state.position;
-    if (i >= state.track.length) return;
     state.busy = true; refreshUI();
+    const seg = await state.round.segment(i); // segment seed'den lazım oldukça üretilir
     const to = segCenter(i);
     anim.walk = {
       from: anim.wx, to, t: 0, dur: Math.abs(to - anim.wx) / WALK_SPEED,
       onDone: () => {
         anim.wx = to;
-        const seg = state.track[i], fail = state.fallAt === i;
         // Boş kalaslarda gerilim kısa; çarpan ya da düşüş varsa uzun
-        anim.strike = { seg: i, t: 0, x: to, fail, delay: fail || seg.bonus > 1 ? 0.75 : 0.35 };
+        anim.strike = { seg: i, t: 0, x: to, fail: seg.fell, delay: seg.fell || seg.bonus > 1 ? 0.75 : 0.35 };
       },
     };
   }
 
   // Şimşek çarpar, çarpan açıklanır (ya da adam düşer)
   function resolveStrike(s) {
-    const i = s.seg, seg = state.track[i], badge = anim.badges[i];
+    const i = s.seg, seg = state.track[i], badge = badgeAt(i);
     if (s.fail) {
-      const style = E.failStyle(state.stepRolls[i]);
+      const style = E.failStyle(seg.stepRoll);
       badge.state = 'dead'; badge.t = 0;
       anim.fail = { style, t: 0, x0: anim.wx };
       anim.shake = 14;
@@ -187,7 +194,6 @@
       badge.state = 'empty'; badge.t = 0;
       anim.floaters.push({ x: anim.wx, y: -BADGE_LIFT, t: 0, text: 'BOŞ' });
       burst(anim.wx, -BADGE_LIFT, '#6b8fb0', 12);
-      if (state.position === state.track.length) { setTimeout(() => cashOut(true), 700); return; }
       setTimeout(() => { if (state.playing) { state.busy = false; refreshUI(); } }, 250);
     } else {
       state.position = i + 1;
@@ -195,7 +201,7 @@
       anim.counter.target = seg.multiplier;
       anim.celebrate = 0.9;
       anim.shake = 6 + E.tierOf(seg.bonus) * 2;
-      if (state.position === state.track.length) { setTimeout(() => cashOut(true), 900); return; }
+      if (seg.multiplier >= E.MAX_MULTIPLIER) { toast('Maksimum çarpan! Otomatik ödeme', 'win'); setTimeout(() => cashOut(true), 900); return; }
       setTimeout(() => { if (state.playing) { state.busy = false; refreshUI(); } }, 450);
     }
     refreshUI();
@@ -296,7 +302,7 @@
       if (!s.hit && s.t >= s.delay) {
         s.hit = true;
         if (s.fail || state.track[s.seg].bonus > 1) {
-          anim.bolt = makeBolt(sx(s.x), -20, s.fail && E.failStyle(state.stepRolls[s.seg]) === 'break' ? sy(0) : sy(-BADGE_LIFT));
+          anim.bolt = makeBolt(sx(s.x), -20, s.fail && E.failStyle(state.track[s.seg].stepRoll) === 'break' ? sy(0) : sy(-BADGE_LIFT));
           anim.flash = 1;
         }
         resolveStrike(s);
@@ -308,6 +314,7 @@
     anim.celebrate = Math.max(0, anim.celebrate - dt);
     // madalyonlar
     for (const b of anim.badges) {
+      if (!b) continue;
       b.t += dt;
       if (b.state === 'empty') continue;
       if (b.state === 'drop') {
@@ -432,23 +439,20 @@
   }
 
   function drawStage() {
-    const n = state.track.length;
+    const [first, last] = visibleRange();
+    const brokenIdx = anim.fail && anim.fail.style === 'break' ? state.position : -1;
+    for (let i = first; i <= last; i++) {
+      if (i === brokenIdx) continue;
+      drawPlankSegment(START_W + i * SEG_W, SEG_W, 0, 0, false);
+    }
+    for (let i = first; i <= last + 1; i++) drawRope(START_W + i * SEG_W);
+    for (const d of anim.debris) drawPlankSegment(d.x, d.w, d.y, d.rot, true);
     drawPlatform(0, START_W, 'BAŞLANGIÇ', ['#4a6a82', '#2a3f52']);
-    if (n > 0) {
-      const brokenIdx = anim.fail && anim.fail.style === 'break' ? state.position : -1;
-      for (let i = 0; i < n; i++) {
-        if (i === brokenIdx) continue;
-        drawPlankSegment(START_W + i * SEG_W, SEG_W, 0, 0, false);
-      }
-      for (let i = 0; i <= n; i++) drawRope(START_W + i * SEG_W);
-      for (const d of anim.debris) drawPlankSegment(d.x, d.w, d.y, d.rot, true);
-      // numaralar
-      ctx.font = 'bold 12px Inter, sans-serif'; ctx.textAlign = 'center';
-      for (let i = 0; i < n; i++) {
-        ctx.fillStyle = i < state.position ? 'rgba(0,231,1,.75)' : 'rgba(255,255,255,.3)';
-        ctx.fillText(String(i + 1), sx(segCenter(i)), sy(0) + 44);
-      }
-      drawPlatform(plankEnd(), FINISH_W, 'BİTİŞ · TAM ÖDEME', ['#5a4a1a', '#2a2410']);
+    // numaralar
+    ctx.font = 'bold 12px Inter, sans-serif'; ctx.textAlign = 'center';
+    for (let i = first; i <= last; i++) {
+      ctx.fillStyle = i < state.position ? 'rgba(0,231,1,.75)' : 'rgba(255,255,255,.3)';
+      ctx.fillText(String(i + 1), sx(segCenter(i)), sy(0) + 44);
     }
   }
 
@@ -498,9 +502,9 @@
   }
 
   function drawBadge(i) {
-    const b = anim.badges[i], seg = state.track[i];
+    const b = badgeAt(i), seg = state.track[i];
     const hidden = b.state === 'hidden' || b.state === 'empty';
-    const tier = E.tierOf(seg.bonus);
+    const tier = seg ? E.tierOf(seg.bonus) : 0;
     const T = b.state === 'dead' ? DEAD : hidden ? MYSTERY : TIERS[tier];
     const key = b.state === 'dead' ? 'dead' : hidden ? 'mystery' : tier;
     const bobY = (hidden || b.state === 'rest') ? Math.sin(anim.time * 2 + b.bob) * 5 : 0;
@@ -532,7 +536,7 @@
 
     ctx.scale(s, s);
     ctx.drawImage(badgeSprite(key, T), -130, -130, 260, 260);
-    const label = hidden ? '?' : b.state === 'dead' ? '✕' : bonusLabel(seg.bonus);
+    const label = hidden || !seg ? '?' : b.state === 'dead' ? '✕' : bonusLabel(seg.bonus);
     const fs = hidden ? 54 : label.length > 4 ? 30 : label.length > 3 ? 36 : 42;
     ctx.font = `900 ${fs}px Inter, Arial Black, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
     for (let d = 5; d >= 1; d--) { ctx.fillStyle = T.extrude; ctx.fillText(label, 0, d); }
@@ -814,7 +818,7 @@
     ctx.save();
     if (anim.shake > 0) ctx.translate((Math.random() - 0.5) * anim.shake, (Math.random() - 0.5) * anim.shake);
     drawBackground(); drawStage();
-    for (let i = 0; i < state.track.length; i++) drawBadge(i);
+    { const [first, last] = visibleRange(); for (let i = first; i <= last; i++) drawBadge(i); }
     if (anim.bolt) drawBolt(anim.bolt);
     drawWalker(); drawParticles(); drawFloaters();
     ctx.restore();
