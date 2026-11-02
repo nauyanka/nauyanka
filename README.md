@@ -21,7 +21,7 @@ Ya da `index.html` dosyasını doğrudan tarayıcıda aç.
 ## Mekanik
 
 - Kalas **sonsuzdur**: adam istediği kadar yürür, ya cash out yapar ya düşer (5000× toplamda otomatik ödeme). Kalasların %60'ı **boş** geçilir; kalanında çarpan düşer: genelde 1.5×–2×, sık sık 3×–4×, nadiren 5×/10×/20×, çok nadiren 50×. Toplam çarpan düşen çarpanların **çarpımı**dır (1.5× · 2× = 3×).
-- Çarpanlar **gizlidir**; her kalasın üstünde "?" madalyonu durur. Adam kalasa basınca kısa bir gerilim olur: ya "?" sönüp **BOŞ** geçilir, ya gökten **şimşek** çakıp çarpan kanatlı madalyon halinde düşer, ya da şimşek adamı düşürür / kalası kırar ve bahis gider.
+- Çarpanlar **gizlidir**; her kalasın üstünde "?" madalyonu durur. Adam kalasa basınca kısa bir gerilim olur: ya "?" sönüp **BOŞ** geçilir, ya gökten **şimşek** çakıp çarpan kanatlı madalyon halinde düşer, ya da şimşek kalası vurur, altındaki tahtalar kırılır, adam düşer ve bahis gider.
 - Madalyon rengi çarpana göre: 1.5× yeşil, 2× mavi, 3×–4× mor, 5× ateş, 10×–20× altın, 50× elmas.
 - Boş kalaslar risksizdir; risk çarpan düşen kalaslarda toplanır (büyük çarpan = o kalasta büyük düşme ihtimali).
 - Kasa avantajı %4 → **RTP %96**. i. kalasa ulaşma olasılığı `0.96 / çarpan(i)` olduğu için hangi noktada cash out yaparsan yap beklenen getiri sabittir. Büyük çarpan sıçraması = düşük geçiş şansı.

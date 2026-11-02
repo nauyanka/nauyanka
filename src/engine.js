@@ -69,14 +69,11 @@ class Round {
 
 function createRound(hmacHex, serverSeed, clientSeed, nonce) { return new Round(hmacHex, serverSeed, clientSeed, nonce); }
 
-/** Kayma mı, kalas kırılması mı? Sadece görsel. */
-function failStyle(roll) { return roll > 0.5 ? 'slip' : 'break'; }
-
 function payout(bet, multiplier) { return Math.floor(bet * multiplier * 100) / 100; }
 
 /** Çarpan büyüklüğüne göre görsel kademe (0 = en düşük, 5 = efsanevi). */
 function tierOf(m) { return m < 2 ? 0 : m < 3 ? 1 : m < 5 ? 2 : m < 10 ? 3 : m < 50 ? 4 : 5; }
 
-const api = { HOUSE_EDGE, MAX_MULTIPLIER, BONUS_TABLE, Round, createRound, failStyle, payout, tierOf };
+const api = { HOUSE_EDGE, MAX_MULTIPLIER, BONUS_TABLE, Round, createRound, payout, tierOf };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 if (typeof window !== 'undefined') window.PlankEngine = api;

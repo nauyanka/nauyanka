@@ -181,12 +181,13 @@
   function resolveStrike(s) {
     const i = s.seg, seg = state.track[i], badge = badgeAt(i);
     if (s.fail) {
-      const style = E.failStyle(seg.stepRoll);
+      // Kayıp her zaman aynı: şimşek kalası vurur, altındaki tahtalar kırılır, adam düşer
       badge.state = 'dead'; badge.t = 0;
-      anim.fail = { style, t: 0, x0: anim.wx };
-      anim.shake = 14;
-      if (style === 'break') spawnDebris(i);
-      burst(anim.wx, -BADGE_LIFT, '#ed4163', 40);
+      anim.fail = { t: 0, x0: anim.wx };
+      anim.shake = 16;
+      spawnDebris(i);
+      burst(anim.wx, 0, '#c9a227', 30);
+      burst(anim.wx, -BADGE_LIFT, '#ed4163', 30);
       setTimeout(() => endRound(false), 1500);
     } else if (seg.bonus === 1) {
       // Boş kalas: "?" madalyonu sönüp dağılır, adam yoluna devam eder
@@ -221,7 +222,7 @@
 
   async function endRound(won, keepToast = false) {
     if (!won && !keepToast) {
-      toast(`${anim.fail?.style === 'slip' ? 'Kaydın!' : 'Kalas kırıldı!'} ${fmt(state.bet)} gitti`, 'lose');
+      toast(`Kalas kırıldı! ${fmt(state.bet)} gitti`, 'lose');
       pushHistory('✕ ' + currentMultiplier().toFixed(2) + '×', false);
     }
     state.playing = false; state.busy = false;
@@ -240,14 +241,16 @@
   }
   function spawnDebris(i) {
     const x0 = START_W + i * SEG_W;
-    for (let k = 0; k < 4; k++) {
-      anim.debris.push({ x: x0 + k * SEG_W / 4, y: 0, w: SEG_W / 4, vx: (k - 1.5) * 40, vy: -60 + Math.random() * 40, rot: 0, vr: (Math.random() - 0.5) * 6 });
+    const n = 6, w = SEG_W / n;
+    for (let k = 0; k < n; k++) {
+      const c = k - (n - 1) / 2;
+      anim.debris.push({ x: x0 + k * w, y: 0, w, vx: c * 55, vy: -90 - Math.random() * 60 + Math.abs(c) * 10, rot: 0, vr: c * 2.5 + (Math.random() - 0.5) * 3 });
     }
   }
   function updateParticles(dt) {
     for (const p of anim.particles) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 700 * dt; p.life -= dt; }
     anim.particles = anim.particles.filter((p) => p.life > 0);
-    for (const d of anim.debris) { d.x += d.vx * dt; d.y += d.vy * dt; d.vy += 1200 * dt; d.rot += d.vr * dt; }
+    for (const d of anim.debris) { d.x += d.vx * dt; d.y += d.vy * dt; d.vy += 1300 * dt; d.rot += d.vr * dt; }
     for (const f of anim.floaters) f.t += dt;
     anim.floaters = anim.floaters.filter((f) => f.t < 1.2);
   }
@@ -302,7 +305,7 @@
       if (!s.hit && s.t >= s.delay) {
         s.hit = true;
         if (s.fail || state.track[s.seg].bonus > 1) {
-          anim.bolt = makeBolt(sx(s.x), -20, s.fail && E.failStyle(state.track[s.seg].stepRoll) === 'break' ? sy(0) : sy(-BADGE_LIFT));
+          anim.bolt = makeBolt(sx(s.x), -20, s.fail ? sy(0) : sy(-BADGE_LIFT));
           anim.flash = 1;
         }
         resolveStrike(s);
@@ -327,12 +330,7 @@
     // düşüş
     if (anim.fail) {
       const f = anim.fail; f.t += dt;
-      if (f.style === 'slip') {
-        anim.wx = f.x0 + Math.min(f.t, 0.5) * 30;
-        anim.wy = f.t > 0.35 ? Math.pow(f.t - 0.35, 2) * 1900 : Math.sin(f.t / 0.35 * Math.PI) * -6;
-      } else {
-        anim.wy = f.t > 0.1 ? Math.pow(f.t - 0.1, 2) * 1700 : 0;
-      }
+      anim.wy = f.t > 0.1 ? Math.pow(f.t - 0.1, 2) * 1700 : 0;
     }
     // kamera
     const camT = Math.max(0, anim.wx - W * 0.4);
@@ -440,7 +438,7 @@
 
   function drawStage() {
     const [first, last] = visibleRange();
-    const brokenIdx = anim.fail && anim.fail.style === 'break' ? state.position : -1;
+    const brokenIdx = anim.fail ? state.position : -1;
     for (let i = first; i <= last; i++) {
       if (i === brokenIdx) continue;
       drawPlankSegment(START_W + i * SEG_W, SEG_W, 0, 0, false);
@@ -734,16 +732,9 @@
       poleAng = 0.45 + 0.35 * Math.sin(φ);
     } else if (f) {
       mood = 'scared'; showPole = false;
-      if (f.style === 'slip') {
-        const k = Math.min(1, f.t / 0.35);
-        rot = -0.9 * k + Math.max(0, f.t - 0.35) * 1.5;
-        thighL = 0.9 * k; thighR = 0.6 * k; kneeL = 0.2; kneeR = 0.5;
-        armL = -2.6 + Math.sin(f.t * 14) * 0.4; armR = -2.4 - Math.sin(f.t * 14) * 0.4; elbowL = elbowR = 0.2;
-      } else {
-        rot = Math.sin(f.t * 5) * 0.25;
-        thighL = 0.5; thighR = -0.3; kneeL = 0.9; kneeR = 0.4;
-        armL = -2.7 + Math.sin(f.t * 16) * 0.5; armR = -2.5 - Math.sin(f.t * 16) * 0.5; elbowL = elbowR = 0.3;
-      }
+      rot = Math.sin(f.t * 5) * 0.25;
+      thighL = 0.5; thighR = -0.3; kneeL = 0.9; kneeR = 0.4;
+      armL = -2.7 + Math.sin(f.t * 16) * 0.5; armR = -2.5 - Math.sin(f.t * 16) * 0.5; elbowL = elbowR = 0.3;
       alpha = Math.max(0, 1 - Math.max(0, f.t - 0.8) * 1.5);
     } else if (cheer > 0) {
       mood = 'cheer'; showPole = false;
