@@ -41,6 +41,7 @@
     playing: false, busy: false,
     serverSeed: randomSeed(), nonce: 0,
     history: [],
+    auto: { running: false, cash: false, target: 1.1 },
   };
 
   const segCenter = (i) => START_W + i * SEG_W + SEG_W / 2;   // i: 0 tabanlı kalas indeksi
@@ -48,7 +49,7 @@
   const badgeAt = (i) => (anim.badges[i] ??= { state: 'hidden', y: -BADGE_LIFT, t: 0, bob: i * 1.3 });
   const visibleRange = () => {
     const first = Math.max(0, Math.floor((anim.camX - START_W) / SEG_W) - 1);
-    const last = Math.ceil((anim.camX + W - START_W) / SEG_W) + 1;
+    const last = Math.ceil((anim.camX + LW - START_W) / SEG_W) + 1;
     return [first, last];
   };
 
@@ -74,44 +75,60 @@
   const canvas = $('#game');
   const ctx = canvas.getContext('2d');
   let W = 0, H = 0, DPR = 1;
+  let Z = 1, LW = 0, LH = 0;   // Z: dünya ölçeği (dar ekranda küçülür); LW/LH: mantıksal görünüm
   function resize() {
     DPR = Math.min(2, window.devicePixelRatio || 1);
     W = canvas.clientWidth; H = canvas.clientHeight;
     canvas.width = W * DPR; canvas.height = H * DPR;
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    Z = W < 640 ? 0.68 : W < 900 ? 0.85 : 1;
+    LW = W / Z; LH = H / Z;
   }
   window.addEventListener('resize', resize);
   resize();
 
-  const groundY = () => H * 0.66;
+  const groundY = () => LH * 0.66;
   const sx = (x) => x - anim.camX;
   const sy = (y) => groundY() + y;
 
   // ---------- UI ----------
-  const fmt = (n) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const MIN_BET = 0.2;
+  const fmt = (n) => n.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' TRY';
   const ui = {
-    balance: $('#balance'), bet: $('#bet'),
-    btnBet: $('#btn-bet'), btnStep: $('#btn-step'), btnCash: $('#btn-cashout'), cashAmt: $('#cashout-amount'),
+    balance: $('#balance'), bet: $('#bet'), betLabel: $('#bet-label'), betMinus: $('#bet-minus'), betPlus: $('#bet-plus'),
+    btnBet: $('#btn-bet'), btnStep: $('#btn-step'), btnCash: $('#btn-cashout'), cashAmt: $('#cashout-amount'), roundActions: $('#round-actions'),
+    tabs: document.querySelectorAll('.tab'), autoRow: $('#auto-row'), autoBet: $('#auto-bet'), autoCash: $('#auto-cash'), autoTarget: $('#auto-target'), autoClear: $('#auto-clear'),
     curMult: $('#cur-mult'), potential: $('#potential'), remaining: $('#remaining'),
     seedHash: $('#seed-hash'), clientSeed: $('#client-seed'), nonce: $('#nonce'), revealed: $('#revealed-seed'),
     history: $('#history'), toast: $('#toast'), preview: $('#track-preview'),
   };
 
   const currentMultiplier = () => (state.position === 0 ? 1 : state.track[state.position - 1].multiplier);
+  const betValue = () => Math.max(0, Math.round((parseFloat(ui.bet.value) || 0) * 100) / 100);
+  function setBet(v) {
+    v = Math.max(MIN_BET, Math.round(v * 100) / 100);
+    ui.bet.value = v.toFixed(2);
+    if (!state.playing) refreshUI();
+  }
+  const betStep = (v) => (v < 1 ? 0.1 : v < 10 ? 0.5 : v < 100 ? 1 : 10);
   const bonusLabel = (b) => (Number.isInteger(b) ? b : b.toFixed(1)) + 'x';
 
   function refreshUI() {
     ui.balance.textContent = fmt(state.balance);
     ui.curMult.textContent = currentMultiplier().toFixed(2) + '×';
-    ui.potential.textContent = state.playing ? fmt(E.payout(state.bet, currentMultiplier())) : '$0.00';
+    ui.potential.textContent = state.playing ? fmt(E.payout(state.bet, currentMultiplier())) : fmt(0);
     ui.remaining.textContent = state.playing ? String(state.position) : '—';
     const inRound = state.playing && !state.busy;
-    ui.btnBet.disabled = state.playing;
-    ui.btnBet.hidden = state.playing;
+    const autoRunning = state.auto.running;
+    ui.btnBet.hidden = state.playing && !autoRunning;
+    ui.roundActions.hidden = !state.playing || autoRunning;
+    ui.btnBet.classList.toggle('stop', autoRunning);
+    ui.btnBet.innerHTML = autoRunning ? 'Durdur<small>Oto bahis açık</small>' : `Bahis<small><span id="bet-label">${betValue().toFixed(2)}</span> TRY</small>`;
     ui.btnStep.disabled = !inRound;
     ui.btnCash.disabled = !inRound || state.position === 0;
-    ui.cashAmt.textContent = state.playing && state.position > 0 ? fmt(E.payout(state.bet, currentMultiplier())) : '';
-    ui.bet.disabled = state.playing;
+    ui.cashAmt.textContent = state.playing && state.position > 0 ? fmt(E.payout(state.bet, currentMultiplier())) : '—';
+    ui.bet.disabled = ui.betMinus.disabled = ui.betPlus.disabled = state.playing;
+    document.querySelectorAll('.quick button').forEach((b) => (b.disabled = state.playing));
     ui.nonce.textContent = state.nonce;
     const shown = state.track.slice(Math.max(0, state.position - 11), state.position + 1);
     const offset = Math.max(0, state.position - 11);
@@ -143,9 +160,9 @@
   // ---------- Tur akışı ----------
   async function startRound() {
     if (state.playing) return;
-    const bet = parseFloat(ui.bet.value);
-    if (!(bet > 0)) return toast('Geçerli bir bahis gir', 'lose');
-    if (bet > state.balance) return toast('Yetersiz bakiye', 'lose');
+    const bet = betValue();
+    if (!(bet >= MIN_BET)) { stopAuto(); return toast(`En az ${fmt(MIN_BET)} bahis gir`, 'lose'); }
+    if (bet > state.balance) { stopAuto(); return toast('Yetersiz bakiye', 'lose'); }
 
     state.bet = Math.round(bet * 100) / 100;
     state.balance -= state.bet;
@@ -159,6 +176,7 @@
     anim.counter = { shown: 1, target: 1 }; anim.celebrate = 0;
     anim.badges = [];
     refreshUI();
+    if (state.auto.running) setTimeout(() => { if (state.playing && !state.busy) step(); }, 400);
   }
 
   async function step() {
@@ -195,16 +213,30 @@
       badge.state = 'empty'; badge.t = 0;
       anim.floaters.push({ x: anim.wx, y: -BADGE_LIFT, t: 0, text: 'BOŞ' });
       burst(anim.wx, -BADGE_LIFT, '#6b8fb0', 12);
-      setTimeout(() => { if (state.playing) { state.busy = false; refreshUI(); } }, 250);
+      setTimeout(() => afterReveal(), 250);
     } else {
       state.position = i + 1;
-      badge.state = 'drop'; badge.t = 0; badge.y = -H;
+      badge.state = 'drop'; badge.t = 0; badge.y = -LH;
       anim.counter.target = seg.multiplier;
       anim.celebrate = 0.9;
       anim.shake = 6 + E.tierOf(seg.bonus) * 2;
       if (seg.multiplier >= E.MAX_MULTIPLIER) { toast('Maksimum çarpan! Otomatik ödeme', 'win'); setTimeout(() => cashOut(true), 900); return; }
-      setTimeout(() => { if (state.playing) { state.busy = false; refreshUI(); } }, 450);
+      setTimeout(() => afterReveal(), 450);
     }
+    refreshUI();
+  }
+
+  // Kalas çözüldükten sonra: oto para çekme hedefi tutuyorsa çek, oto bahis açıksa yürümeye devam et
+  function afterReveal() {
+    if (!state.playing) return;
+    state.busy = false; refreshUI();
+    if (state.auto.cash && state.position > 0 && currentMultiplier() >= state.auto.target) { cashOut(true); return; }
+    if (state.auto.running) setTimeout(() => { if (state.playing && !state.busy) step(); }, 350);
+  }
+
+  function stopAuto() {
+    state.auto.running = false;
+    ui.autoBet.checked = false;
     refreshUI();
   }
 
@@ -230,6 +262,7 @@
     state.serverSeed = randomSeed(); state.nonce = 0;
     await showSeedHash();
     refreshUI();
+    if (state.auto.running) setTimeout(() => { if (state.auto.running && !state.playing) startRound(); }, 1600);
   }
 
   // ---------- Parçacıklar / enkaz ----------
@@ -333,7 +366,7 @@
       anim.wy = f.t > 0.1 ? Math.pow(f.t - 0.1, 2) * 1700 : 0;
     }
     // kamera
-    const camT = Math.max(0, anim.wx - W * 0.4);
+    const camT = Math.max(0, anim.wx - LW * 0.4);
     anim.camX += (camT - anim.camX) * Math.min(1, dt * 4);
     anim.shake = Math.max(0, anim.shake - dt * 28);
     anim.counter.shown += (anim.counter.target - anim.counter.shown) * Math.min(1, dt * 5);
@@ -342,15 +375,15 @@
 
   // ---------- Çizim: arka plan ----------
   function drawBackground() {
-    const g = ctx.createLinearGradient(0, 0, 0, H);
+    const g = ctx.createLinearGradient(0, 0, 0, LH);
     g.addColorStop(0, '#060e18'); g.addColorStop(0.5, '#0e2233'); g.addColorStop(1, '#050c12');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, LW, LH);
 
     // fırtına bulutları (gerilim anında aydınlanır)
     const tension = anim.strike ? Math.min(1, anim.strike.t / 0.75) : 0;
     ctx.save();
     for (let i = 0; i < 7; i++) {
-      const cx = (((i * 311) - anim.camX * 0.15) % (W + 300) + W + 300) % (W + 300) - 150;
+      const cx = (((i * 311) - anim.camX * 0.15) % (LW + 300) + LW + 300) % (LW + 300) - 150;
       const cy = 30 + (i % 3) * 28;
       const cg = ctx.createRadialGradient(cx, cy, 10, cx, cy, 150);
       const lum = 0.1 + tension * 0.18 + anim.flash * 0.5;
@@ -362,17 +395,17 @@
     // spot ışıkları
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
     for (let i = 0; i < 3; i++) {
-      const bx = W * (0.2 + i * 0.3) + Math.sin(anim.time * 0.35 + i * 2) * 70 - anim.camX * 0.06;
-      const beam = ctx.createLinearGradient(bx, 0, bx, H * 0.9);
+      const bx = LW * (0.2 + i * 0.3) + Math.sin(anim.time * 0.35 + i * 2) * 70 - anim.camX * 0.06;
+      const beam = ctx.createLinearGradient(bx, 0, bx, LH * 0.9);
       beam.addColorStop(0, 'rgba(255,215,120,0.07)'); beam.addColorStop(1, 'rgba(255,215,120,0)');
       ctx.fillStyle = beam;
-      ctx.beginPath(); ctx.moveTo(bx - 30, 0); ctx.lineTo(bx + 30, 0); ctx.lineTo(bx + 240, H * 0.9); ctx.lineTo(bx - 240, H * 0.9); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(bx - 30, 0); ctx.lineTo(bx + 30, 0); ctx.lineTo(bx + 240, LH * 0.9); ctx.lineTo(bx - 240, LH * 0.9); ctx.closePath(); ctx.fill();
     }
     ctx.restore();
 
     // yıldız / altın tozu
     for (let i = 0; i < 80; i++) {
-      const x = (((i * 137.5) - anim.camX * 0.12) % W + W) % W, y = (i * 61.8) % (H * 0.62);
+      const x = (((i * 137.5) - anim.camX * 0.12) % LW + LW) % LW, y = (i * 61.8) % (LH * 0.62);
       const tw = 0.4 + 0.6 * Math.abs(Math.sin(anim.time * 1.5 + i));
       ctx.fillStyle = i % 6 === 0 ? `rgba(255,215,90,${tw})` : `rgba(255,255,255,${tw * 0.5})`;
       ctx.fillRect(x, y, i % 6 === 0 ? 2.5 : 1.5, i % 6 === 0 ? 2.5 : 1.5);
@@ -380,17 +413,17 @@
 
     // uzak dağlar
     ctx.fillStyle = '#0a1826';
-    ctx.beginPath(); ctx.moveTo(0, H);
-    for (let x = 0; x <= W + 40; x += 40) {
+    ctx.beginPath(); ctx.moveTo(0, LH);
+    for (let x = 0; x <= LW + 40; x += 40) {
       const wx = x + anim.camX * 0.25;
       ctx.lineTo(x, sy(30) + Math.sin(wx * 0.004) * 50 + Math.sin(wx * 0.013) * 25);
     }
-    ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
+    ctx.lineTo(LW, LH); ctx.closePath(); ctx.fill();
 
     // uçurum sisi
-    const fog = ctx.createLinearGradient(0, sy(40), 0, H);
+    const fog = ctx.createLinearGradient(0, sy(40), 0, LH);
     fog.addColorStop(0, 'rgba(5,12,18,0)'); fog.addColorStop(1, 'rgba(3,8,14,0.97)');
-    ctx.fillStyle = fog; ctx.fillRect(0, sy(40), W, H);
+    ctx.fillStyle = fog; ctx.fillRect(0, sy(40), LW, LH);
   }
 
   // ---------- Çizim: platformlar ve kalas ----------
@@ -398,9 +431,9 @@
     const px = sx(x), py = sy(0);
     const g = ctx.createLinearGradient(px, 0, px + w, 0);
     g.addColorStop(0, '#22384a'); g.addColorStop(0.5, '#345064'); g.addColorStop(1, '#1b2d3c');
-    ctx.fillStyle = g; ctx.fillRect(px, py + 12, w, H);
+    ctx.fillStyle = g; ctx.fillRect(px, py + 12, w, LH);
     ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 1;
-    for (let y = py + 44; y < H; y += 34) { ctx.beginPath(); ctx.moveTo(px, y); ctx.lineTo(px + w, y); ctx.stroke(); }
+    for (let y = py + 44; y < LH; y += 34) { ctx.beginPath(); ctx.moveTo(px, y); ctx.lineTo(px + w, y); ctx.stroke(); }
   }
   function drawPlatform(x, w, label, colors) {
     drawPillar(x, w);
@@ -768,18 +801,19 @@
   function drawHUD() {
     ctx.textAlign = 'center';
     if (!state.playing && !anim.fail && anim.celebrate <= 0) {
-      ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.font = 'bold 18px Inter, sans-serif';
-      ctx.fillText('Bahis yap · kalasta yürü · şimşek çarpan getirsin · düşmeden Cash Out yap', W / 2, 60);
+      ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.font = `bold ${W < 640 ? 13 : 18}px Inter, sans-serif`;
+      ctx.fillText(W < 640 ? 'Bahis yap · yürü · düşmeden para çek' : 'Bahis yap · kalasta yürü · şimşek çarpan getirsin · düşmeden Para Çek', W / 2, W < 640 ? 80 : 60);
       return;
     }
     const m = anim.counter.shown, T = TIERS[E.tierOf(Math.max(1, m))];
-    ctx.font = '900 54px Inter, sans-serif';
-    const g = ctx.createLinearGradient(0, 30, 0, 80);
+    const narrow = W < 640, fs = narrow ? 36 : 54, y = narrow ? 92 : 74;
+    ctx.font = `900 ${fs}px Inter, sans-serif`;
+    const g = ctx.createLinearGradient(0, y - fs * 0.8, 0, y + fs * 0.1);
     g.addColorStop(0, T.text[0]); g.addColorStop(1, T.text[1]);
-    ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.strokeText(m.toFixed(2) + '×', W / 2, 74);
-    ctx.fillStyle = g; ctx.fillText(m.toFixed(2) + '×', W / 2, 74);
-    ctx.fillStyle = '#c9d3e6'; ctx.font = '600 14px Inter, sans-serif';
-    ctx.fillText(`Bahis ${fmt(state.bet)} · Olası kazanç ${fmt(E.payout(state.bet, currentMultiplier()))}`, W / 2, 100);
+    ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.strokeText(m.toFixed(2) + '×', W / 2, y);
+    ctx.fillStyle = g; ctx.fillText(m.toFixed(2) + '×', W / 2, y);
+    ctx.fillStyle = '#c9d3e6'; ctx.font = `600 ${narrow ? 12 : 14}px Inter, sans-serif`;
+    ctx.fillText(`Bahis ${fmt(state.bet)} · Olası kazanç ${fmt(E.payout(state.bet, currentMultiplier()))}`, W / 2, y + (narrow ? 22 : 26));
   }
 
   function drawFloaters() {
@@ -806,7 +840,7 @@
   function loop(now) {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
     update(dt);
-    ctx.save();
+    ctx.save(); ctx.scale(Z, Z);
     if (anim.shake > 0) ctx.translate((Math.random() - 0.5) * anim.shake, (Math.random() - 0.5) * anim.shake);
     drawBackground(); drawStage();
     { const [first, last] = visibleRange(); for (let i = first; i <= last; i++) drawBadge(i); }
@@ -819,13 +853,30 @@
   }
 
   // ---------- Olaylar ----------
-  ui.btnBet.addEventListener('click', startRound);
+  ui.btnBet.addEventListener('click', () => { if (state.auto.running) stopAuto(); else startRound(); });
   ui.btnStep.addEventListener('click', step);
   ui.btnCash.addEventListener('click', () => cashOut(false));
-  document.querySelectorAll('[data-bet]').forEach((b) => b.addEventListener('click', () => {
-    const v = parseFloat(ui.bet.value) || 0;
-    ui.bet.value = (b.dataset.bet === 'half' ? v / 2 : v * 2).toFixed(2);
+  ui.betMinus.addEventListener('click', () => { const v = betValue(); setBet(v - betStep(v - 0.001)); });
+  ui.betPlus.addEventListener('click', () => { const v = betValue(); setBet(v + betStep(v)); });
+  ui.bet.addEventListener('input', () => { if (!state.playing) refreshUI(); });
+  ui.bet.addEventListener('change', () => setBet(betValue()));
+  document.querySelectorAll('[data-amt]').forEach((b) => b.addEventListener('click', () => setBet(parseFloat(b.dataset.amt))));
+  // Sekmeler
+  ui.tabs.forEach((t) => t.addEventListener('click', () => {
+    ui.tabs.forEach((x) => x.classList.toggle('active', x === t));
+    ui.autoRow.hidden = t.dataset.tab !== 'auto';
   }));
+  // Oto bahis / oto para çekme
+  ui.autoBet.addEventListener('change', () => {
+    state.auto.running = ui.autoBet.checked;
+    refreshUI();
+    if (state.auto.running && !state.playing) startRound();
+    else if (state.auto.running && state.playing && !state.busy) step();
+  });
+  const readTarget = () => { const v = parseFloat(ui.autoTarget.value); state.auto.target = v >= 1.01 ? v : 1.1; };
+  ui.autoCash.addEventListener('change', () => { state.auto.cash = ui.autoCash.checked; readTarget(); });
+  ui.autoTarget.addEventListener('change', () => { readTarget(); ui.autoTarget.value = state.auto.target.toFixed(2); });
+  ui.autoClear.addEventListener('click', () => { ui.autoTarget.value = '1.10'; readTarget(); });
   window.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT') return;
     if (e.code === 'Space') { e.preventDefault(); state.playing ? step() : startRound(); }

@@ -11,35 +11,51 @@
   <main class="stage">
     <canvas id="game"></canvas>
     <div class="brand">PLANK<span>WALKER</span></div>
-    <div class="balance"><span>Bakiye</span><strong id="balance">$1,000.00</strong></div>
+    <div class="balance"><span>Bakiye</span><strong id="balance">1.000,00 TRY</strong></div>
     <div id="toast" class="toast"></div>
   </main>
 
   <section class="dock">
-    <div class="dock-col bet-col">
-      <label class="field">
-        <span>Bahis Miktarı</span>
-        <div class="input-row">
-          <input id="bet" type="number" min="0.1" step="0.1" value="10">
-          <button data-bet="half">½</button>
-          <button data-bet="double">2×</button>
-        </div>
-      </label>
-      <div class="history" id="history"></div>
-    </div>
-
-    <div class="dock-col action-col">
-      <button id="btn-bet" class="btn primary">BAHİS YAP</button>
-      <div class="round-actions">
-        <button id="btn-step" class="btn step" disabled>YÜRÜ</button>
-        <button id="btn-cashout" class="btn cashout" disabled>CASH OUT <span id="cashout-amount"></span></button>
+    <div class="bet-panel">
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="bet" id="tab-bet">Bahis</button>
+        <button class="tab" data-tab="auto" id="tab-auto">Oto</button>
       </div>
+      <div class="bet-grid">
+        <div class="bet-left">
+          <div class="stepper">
+            <button id="bet-minus" aria-label="Azalt">−</button>
+            <input id="bet" type="number" min="0.20" step="0.10" value="0.20" inputmode="decimal">
+            <button id="bet-plus" aria-label="Artır">+</button>
+          </div>
+          <div class="quick">
+            <button data-amt="1">1</button><button data-amt="2">2</button>
+            <button data-amt="5">5</button><button data-amt="10">10</button>
+          </div>
+        </div>
+        <div class="bet-right">
+          <button id="btn-bet" class="btn-main bet">Bahis<small><span id="bet-label">0.20</span> TRY</small></button>
+          <div class="round-actions" id="round-actions" hidden>
+            <button id="btn-step" class="btn-main step" disabled>Yürü</button>
+            <button id="btn-cashout" class="btn-main cashout" disabled>Para Çek<small id="cashout-amount">—</small></button>
+          </div>
+        </div>
+      </div>
+      <div class="auto-row" id="auto-row" hidden>
+        <label class="toggle"><span>Oto Bahis</span><input type="checkbox" id="auto-bet"><i></i></label>
+        <label class="toggle"><span>Oto Para Çekme</span><input type="checkbox" id="auto-cash"><i></i></label>
+        <div class="auto-target">
+          <input id="auto-target" type="number" min="1.01" step="0.01" value="1.10" inputmode="decimal">
+          <button id="auto-clear" aria-label="Temizle">×</button>
+        </div>
+      </div>
+      <div class="history" id="history"></div>
     </div>
 
     <div class="dock-col stats-col">
       <div class="stats">
         <div><span>Mevcut Çarpan</span><strong id="cur-mult">1.00×</strong></div>
-        <div><span>Olası Kazanç</span><strong id="potential">$0.00</strong></div>
+        <div><span>Olası Kazanç</span><strong id="potential">0,00 TRY</strong></div>
         <div><span>Yürünen Kalas</span><strong id="remaining">—</strong></div>
       </div>
       <div class="track-preview" id="track-preview"></div>

@@ -16,7 +16,12 @@ Ya da `index.html` dosyasını doğrudan tarayıcıda aç.
 | Tuş | İşlev |
 |-----|-------|
 | Boşluk | Bahis yap / Yürü |
-| C | Cash out |
+| C | Para çek |
+
+## Bahis paneli
+
+- **Bahis** sekmesi: −/+ ile tutar (en az 0,20 TRY), 1 / 2 / 5 / 10 hızlı seçim, büyük yeşil **Bahis** butonu. Tur içinde **Yürü** ve **Para Çek** butonları.
+- **Oto** sekmesi: **Oto Bahis** açıkken adam otomatik yürür ve her tur bitince yeni tur başlar (Durdur ile kapanır). **Oto Para Çekme** açıkken toplam çarpan hedefe (örn. 1.10) ulaşınca otomatik para çekilir.
 
 ## Mekanik
 
