@@ -59,6 +59,7 @@
     badges: [],            // kalas başına: { state: 'hidden'|'drop'|'land'|'rest'|'dead', y, t, bob }
     debris: [],            // kırılan kalas parçaları
     particles: [],
+    floaters: [],          // yükselen küçük yazılar ("BOŞ")
     camX: 0, shake: 0,
     counter: { shown: 1, target: 1 },
     time: 0,
@@ -91,6 +92,7 @@
   };
 
   const currentMultiplier = () => (state.position === 0 ? 1 : state.track[state.position - 1].multiplier);
+  const bonusLabel = (b) => (Number.isInteger(b) ? b : b.toFixed(1)) + 'x';
 
   function refreshUI() {
     ui.balance.textContent = fmt(state.balance);
@@ -107,9 +109,11 @@
     ui.nonce.textContent = state.nonce;
     ui.preview.innerHTML = state.track.map((s, i) => {
       const b = anim.badges[i];
-      const revealed = i < state.position || (b && b.state === 'dead');
-      const cls = b && b.state === 'dead' ? 'dead' : i < state.position ? 'done' : i === state.position && state.playing ? 'cur' : '';
-      return `<span class="seg ${cls}">${revealed ? s.multiplier.toFixed(2) + '×' : '?'}</span>`;
+      const dead = b && b.state === 'dead';
+      const revealed = i < state.position || dead;
+      const cls = dead ? 'dead' : i < state.position ? (s.bonus > 1 ? 'done' : 'empty') : i === state.position && state.playing ? 'cur' : '';
+      const label = dead ? '✕' : !revealed ? '?' : s.bonus > 1 ? bonusLabel(s.bonus) : '—';
+      return `<span class="seg ${cls}">${label}</span>`;
     }).join('');
   }
 
@@ -143,7 +147,7 @@
     state.position = 0; state.playing = true; state.busy = false;
 
     anim.wx = START_W / 2; anim.wy = 0; anim.phase = 0;
-    anim.walk = null; anim.strike = null; anim.bolt = null; anim.fail = null; anim.debris = []; anim.particles = [];
+    anim.walk = null; anim.strike = null; anim.bolt = null; anim.fail = null; anim.debris = []; anim.particles = []; anim.floaters = [];
     anim.counter = { shown: 1, target: 1 }; anim.celebrate = 0;
     anim.badges = state.track.map((_, i) => ({ state: 'hidden', y: -BADGE_LIFT, t: 0, bob: i * 1.3 }));
     refreshUI();
@@ -157,7 +161,12 @@
     const to = segCenter(i);
     anim.walk = {
       from: anim.wx, to, t: 0, dur: Math.abs(to - anim.wx) / WALK_SPEED,
-      onDone: () => { anim.wx = to; anim.strike = { seg: i, t: 0, x: to, fail: state.fallAt === i }; },
+      onDone: () => {
+        anim.wx = to;
+        const seg = state.track[i], fail = state.fallAt === i;
+        // Boş kalaslarda gerilim kısa; çarpan ya da düşüş varsa uzun
+        anim.strike = { seg: i, t: 0, x: to, fail, delay: fail || seg.bonus > 1 ? 0.75 : 0.35 };
+      },
     };
   }
 
@@ -172,12 +181,20 @@
       if (style === 'break') spawnDebris(i);
       burst(anim.wx, -BADGE_LIFT, '#ed4163', 40);
       setTimeout(() => endRound(false), 1500);
+    } else if (seg.bonus === 1) {
+      // Boş kalas: "?" madalyonu sönüp dağılır, adam yoluna devam eder
+      state.position = i + 1;
+      badge.state = 'empty'; badge.t = 0;
+      anim.floaters.push({ x: anim.wx, y: -BADGE_LIFT, t: 0, text: 'BOŞ' });
+      burst(anim.wx, -BADGE_LIFT, '#6b8fb0', 12);
+      if (state.position === state.track.length) { setTimeout(() => cashOut(true), 700); return; }
+      setTimeout(() => { if (state.playing) { state.busy = false; refreshUI(); } }, 250);
     } else {
       state.position = i + 1;
       badge.state = 'drop'; badge.t = 0; badge.y = -H;
       anim.counter.target = seg.multiplier;
       anim.celebrate = 0.9;
-      anim.shake = 6 + E.tierOf(seg.multiplier) * 2;
+      anim.shake = 6 + E.tierOf(seg.bonus) * 2;
       if (state.position === state.track.length) { setTimeout(() => cashOut(true), 900); return; }
       setTimeout(() => { if (state.playing) { state.busy = false; refreshUI(); } }, 450);
     }
@@ -199,7 +216,7 @@
   async function endRound(won, keepToast = false) {
     if (!won && !keepToast) {
       toast(`${anim.fail?.style === 'slip' ? 'Kaydın!' : 'Kalas kırıldı!'} ${fmt(state.bet)} gitti`, 'lose');
-      pushHistory('✕ ' + state.track[state.position].multiplier.toFixed(2) + '×', false);
+      pushHistory('✕ ' + currentMultiplier().toFixed(2) + '×', false);
     }
     state.playing = false; state.busy = false;
     ui.revealed.textContent = state.serverSeed;
@@ -225,6 +242,8 @@
     for (const p of anim.particles) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 700 * dt; p.life -= dt; }
     anim.particles = anim.particles.filter((p) => p.life > 0);
     for (const d of anim.debris) { d.x += d.vx * dt; d.y += d.vy * dt; d.vy += 1200 * dt; d.rot += d.vr * dt; }
+    for (const f of anim.floaters) f.t += dt;
+    anim.floaters = anim.floaters.filter((f) => f.t < 1.2);
   }
 
   // ---------- Şimşek ----------
@@ -274,10 +293,12 @@
     // şimşek gerilimi → çarpma
     if (anim.strike) {
       const s = anim.strike; s.t += dt;
-      if (!s.hit && s.t >= 0.75) {
+      if (!s.hit && s.t >= s.delay) {
         s.hit = true;
-        anim.bolt = makeBolt(sx(s.x), -20, s.fail && E.failStyle(state.stepRolls[s.seg]) === 'break' ? sy(0) : sy(-BADGE_LIFT));
-        anim.flash = 1;
+        if (s.fail || state.track[s.seg].bonus > 1) {
+          anim.bolt = makeBolt(sx(s.x), -20, s.fail && E.failStyle(state.stepRolls[s.seg]) === 'break' ? sy(0) : sy(-BADGE_LIFT));
+          anim.flash = 1;
+        }
         resolveStrike(s);
       }
       if (s.t > 1.2) anim.strike = null;
@@ -288,6 +309,7 @@
     // madalyonlar
     for (const b of anim.badges) {
       b.t += dt;
+      if (b.state === 'empty') continue;
       if (b.state === 'drop') {
         b.y += 2400 * dt;
         if (b.y >= -BADGE_LIFT) { b.y = -BADGE_LIFT; b.state = 'land'; b.t = 0; }
@@ -477,17 +499,20 @@
 
   function drawBadge(i) {
     const b = anim.badges[i], seg = state.track[i];
-    const hidden = b.state === 'hidden';
-    const T = b.state === 'dead' ? DEAD : hidden ? MYSTERY : TIERS[E.tierOf(seg.multiplier)];
-    const key = b.state === 'dead' ? 'dead' : hidden ? 'mystery' : E.tierOf(seg.multiplier);
+    const hidden = b.state === 'hidden' || b.state === 'empty';
+    const tier = E.tierOf(seg.bonus);
+    const T = b.state === 'dead' ? DEAD : hidden ? MYSTERY : TIERS[tier];
+    const key = b.state === 'dead' ? 'dead' : hidden ? 'mystery' : tier;
     const bobY = (hidden || b.state === 'rest') ? Math.sin(anim.time * 2 + b.bob) * 5 : 0;
     const x = sx(segCenter(i)), y = sy(b.y) + bobY;
-    let s = hidden ? 0.52 : 0.8 + E.tierOf(seg.multiplier) * 0.03;
+    let s = hidden ? 0.52 : 0.8 + tier * 0.03;
     if (b.state === 'land') s *= 1 + Math.sin(Math.min(1, b.t / 0.4) * Math.PI) * 0.3;
     if (b.state === 'dead') s *= 0.8;
+    let fade = 1;
+    if (b.state === 'empty') { if (b.t > 0.45) return; fade = 1 - b.t / 0.45; s *= 1 - b.t / 0.45 * 0.5; }
     const tension = anim.strike && anim.strike.seg === i && !anim.strike.hit ? Math.min(1, anim.strike.t / 0.75) : 0;
 
-    ctx.save(); ctx.translate(x, y);
+    ctx.save(); ctx.translate(x, y); ctx.globalAlpha = fade;
     // ışıma
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
     const ga = hidden ? 0.08 + tension * 0.5 + Math.sin(anim.time * 10) * tension * 0.2 : 0.22 + 0.12 * Math.sin(anim.time * 3 + b.bob) + (b.state === 'land' ? 0.5 : 0) + (typeof key === 'number' ? key * 0.04 : 0);
@@ -507,9 +532,8 @@
 
     ctx.scale(s, s);
     ctx.drawImage(badgeSprite(key, T), -130, -130, 260, 260);
-    const m = seg.multiplier;
-    const label = hidden ? '?' : b.state === 'dead' ? '✕' : (m >= 100 ? m.toFixed(0) : m.toFixed(m >= 10 ? 1 : 2)) + 'x';
-    const fs = hidden ? 54 : label.length > 5 ? 26 : label.length > 4 ? 30 : 36;
+    const label = hidden ? '?' : b.state === 'dead' ? '✕' : bonusLabel(seg.bonus);
+    const fs = hidden ? 54 : label.length > 4 ? 30 : label.length > 3 ? 36 : 42;
     ctx.font = `900 ${fs}px Inter, Arial Black, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
     for (let d = 5; d >= 1; d--) { ctx.fillStyle = T.extrude; ctx.fillText(label, 0, d); }
     ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,.65)'; ctx.strokeText(label, 0, 0);
@@ -750,7 +774,7 @@
     ctx.textAlign = 'center';
     if (!state.playing && !anim.fail && anim.celebrate <= 0) {
       ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.font = 'bold 18px Inter, sans-serif';
-      ctx.fillText('Bahis yap · kalasta yürü · çarpan şimşekle gelsin · düşmeden Cash Out yap', W / 2, 60);
+      ctx.fillText('Bahis yap · kalasta yürü · şimşek çarpan getirsin · düşmeden Cash Out yap', W / 2, 60);
       return;
     }
     const m = anim.counter.shown, T = TIERS[E.tierOf(Math.max(1, m))];
@@ -761,6 +785,17 @@
     ctx.fillStyle = g; ctx.fillText(m.toFixed(2) + '×', W / 2, 74);
     ctx.fillStyle = '#c9d3e6'; ctx.font = '600 14px Inter, sans-serif';
     ctx.fillText(`Bahis ${fmt(state.bet)} · Olası kazanç ${fmt(E.payout(state.bet, currentMultiplier()))}`, W / 2, 100);
+  }
+
+  function drawFloaters() {
+    for (const f of anim.floaters) {
+      const a = f.t < 0.9 ? 1 : 1 - (f.t - 0.9) / 0.3;
+      ctx.globalAlpha = Math.max(0, a);
+      ctx.font = '900 20px Inter, sans-serif'; ctx.textAlign = 'center';
+      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.strokeText(f.text, sx(f.x), sy(f.y) - f.t * 40);
+      ctx.fillStyle = '#b1bad3'; ctx.fillText(f.text, sx(f.x), sy(f.y) - f.t * 40);
+    }
+    ctx.globalAlpha = 1;
   }
 
   function drawParticles() {
@@ -781,7 +816,7 @@
     drawBackground(); drawStage();
     for (let i = 0; i < state.track.length; i++) drawBadge(i);
     if (anim.bolt) drawBolt(anim.bolt);
-    drawWalker(); drawParticles();
+    drawWalker(); drawParticles(); drawFloaters();
     ctx.restore();
     if (anim.flash > 0) { ctx.fillStyle = `rgba(220,235,255,${anim.flash * 0.55})`; ctx.fillRect(0, 0, W, H); }
     drawHUD();

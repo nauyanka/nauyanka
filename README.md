@@ -20,9 +20,10 @@ Ya da `index.html` dosyasını doğrudan tarayıcıda aç.
 
 ## Mekanik
 
-- Her tur **rastgele parkur**: 12–18 kalas, çarpanlar küçükten büyüğe yavaş yavaş artar (tipik olarak 5. kalasta ~2.2×, 10. kalasta ~5×, sonda ~11×, nadiren 50×+). Çarpanlar **gizlidir**; her kalasın üstünde "?" madalyonu durur.
-- Adam kalasta normal yürür. Kalasa basınca gökten **şimşek** çakar ve çarpan sürpriz olarak kanatlı madalyon halinde düşer. Çarpan büyüdükçe madalyonun rengi değişir: yeşil → mavi → mor → ateş → altın → elmas (100×+).
-- Şimşek bazen kötü haber getirir: adam kayar ya da kalas kırılır, bahis gider.
+- Her tur **rastgele parkur**: 12–18 kalas. Kalasların %60'ı **boş** geçilir; kalanında çarpan düşer: genelde 1.5×–2×, sık sık 3×–4×, nadiren 5×/10×/20×, çok nadiren 50×. Toplam çarpan düşen çarpanların **çarpımı**dır (1.5× · 2× = 3×).
+- Çarpanlar **gizlidir**; her kalasın üstünde "?" madalyonu durur. Adam kalasa basınca kısa bir gerilim olur: ya "?" sönüp **BOŞ** geçilir, ya gökten **şimşek** çakıp çarpan kanatlı madalyon halinde düşer, ya da şimşek adamı düşürür / kalası kırar ve bahis gider.
+- Madalyon rengi çarpana göre: 1.5× yeşil, 2× mavi, 3×–4× mor, 5× ateş, 10×–20× altın, 50× elmas.
+- Boş kalaslar risksizdir; risk çarpan düşen kalaslarda toplanır (büyük çarpan = o kalasta büyük düşme ihtimali).
 - Kasa avantajı %4 → **RTP %96**. i. kalasa ulaşma olasılığı `0.96 / çarpan(i)` olduğu için hangi noktada cash out yaparsan yap beklenen getiri sabittir. Büyük çarpan sıçraması = düşük geçiş şansı.
 - **Provably fair**: tur başlamadan server seed'in SHA-256 hash'i gösterilir; parkur ve adım zarları `HMAC-SHA256(serverSeed, clientSeed:nonce:round)` ile üretilir; tur bitince seed açıklanır.
 

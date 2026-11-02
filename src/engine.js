@@ -10,41 +10,52 @@
  */
 
 const HOUSE_EDGE = 0.04;
-const TRACK_ROLLS = 40;   // parkur üretimi için ayrılan zar sayısı
+const TRACK_ROLLS = 24;   // parkur üretimi için ayrılan zar sayısı
 const MAX_SEGMENTS = 18;
 const MIN_SEGMENTS = 12;
 const MAX_MULTIPLIER = 1000;
+
+/**
+ * Kalas bonusu tablosu: [değer, olasılık].
+ * 1 = boş kalas (çarpan yok, risk yok). Çoğu kalas boş geçilir;
+ * çıkan çarpanlar genelde 1.5×–4×, nadiren 10×/20×, çok nadiren 50×.
+ */
+const BONUS_TABLE = [
+  [1, 0.60], [1.5, 0.16], [2, 0.12], [3, 0.06], [4, 0.03],
+  [5, 0.015], [10, 0.008], [20, 0.005], [50, 0.002],
+];
+function pickBonus(r) {
+  let acc = 0;
+  for (const [v, w] of BONUS_TABLE) { acc += w; if (r < acc) return v; }
+  return 1;
+}
 
 const round2 = (n) => Math.round(n * 100) / 100;
 
 /**
  * Rastgele parkur üret. rolls[0..TRACK_ROLLS) kullanılır.
- * Dönen segmentler: { index, multiplier, survive, reach }
- * Çarpanlar oyuncuya gizlidir; adam kalasa basınca açıklanır.
+ * Dönen segmentler: { index, bonus, multiplier, survive, reach }
+ *  - bonus: bu kalasta düşen çarpan (1 = boş)
+ *  - multiplier: buraya kadar biriken toplam çarpan (bonusların çarpımı)
+ * Boş kalaslarda toplam değişmediği için geçiş riski yoktur; risk,
+ * çarpan düşen kalaslarda (şimşek anında) toplanır.
  */
 function generateTrack(rolls) {
   if (rolls.length < TRACK_ROLLS) throw new Error('Parkur için yetersiz zar');
   const count = MIN_SEGMENTS + Math.floor(rolls[0] * (MAX_SEGMENTS - MIN_SEGMENTS + 1));
+  const bonuses = [];
+  for (let i = 0; i < count; i++) bonuses.push(pickBonus(rolls[1 + i]));
+  if (bonuses.every((b) => b === 1)) bonuses[count - 1] = 2; // tamamen boş parkur olmasın
+
   const segments = [];
   let mult = 1, prevReach = 1;
-
   for (let i = 0; i < count; i++) {
-    const r = rolls[1 + i * 2], g = rolls[2 + i * 2];
-    // Çarpan büyüme çarpanı: çoğunlukla küçük adımlar, ara sıra sıçrama.
-    // Büyüme hızı = düşme riski; yavaş büyüme uzun ve gerilimli turlar demek.
-    let growth;
-    if (r < 0.75) growth = 1.05 + g * 0.15;       // 1.05–1.20  (geçiş şansı ~%83–95)
-    else if (r < 0.95) growth = 1.20 + g * 0.20;  // 1.20–1.40
-    else if (r < 0.995) growth = 1.4 + g * 0.4;   // 1.4–1.8
-    else growth = 1.8 + g * 0.7;                  // 1.8–2.5 (nadir)
-    mult = Math.min(MAX_MULTIPLIER, round2(mult * growth));
-
+    mult = Math.min(MAX_MULTIPLIER, round2(mult * bonuses[i]));
     const reach = (1 - HOUSE_EDGE) / mult;
     const survive = Math.min(1, reach / prevReach);
     prevReach = reach;
-
-    segments.push({ index: i + 1, multiplier: mult, survive, reach });
-    if (mult >= MAX_MULTIPLIER) break; // tavana ulaşıldı, parkur burada biter
+    segments.push({ index: i + 1, bonus: bonuses[i], multiplier: mult, survive, reach });
+    if (mult >= MAX_MULTIPLIER) break;
   }
   return segments;
 }
@@ -89,8 +100,8 @@ function failStyle(roll) { return roll > 0.5 ? 'slip' : 'break'; }
 function payout(bet, multiplier) { return Math.floor(bet * multiplier * 100) / 100; }
 
 /** Çarpan büyüklüğüne göre görsel kademe (0 = en düşük, 5 = efsanevi). */
-function tierOf(m) { return m < 2 ? 0 : m < 5 ? 1 : m < 10 ? 2 : m < 25 ? 3 : m < 100 ? 4 : 5; }
+function tierOf(m) { return m < 2 ? 0 : m < 3 ? 1 : m < 5 ? 2 : m < 10 ? 3 : m < 50 ? 4 : 5; }
 
-const api = { HOUSE_EDGE, TRACK_ROLLS, MIN_SEGMENTS, MAX_SEGMENTS, generateTrack, generateRolls, createRound, resolveRound, failStyle, payout, tierOf };
+const api = { HOUSE_EDGE, TRACK_ROLLS, MIN_SEGMENTS, MAX_SEGMENTS, BONUS_TABLE, generateTrack, generateRolls, createRound, resolveRound, failStyle, payout, tierOf };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 if (typeof window !== 'undefined') window.PlankEngine = api;

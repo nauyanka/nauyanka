@@ -9,12 +9,14 @@ test('rastgele parkurlarda RTP her segmentte sabit %96', async () => {
   for (let n = 0; n < 200; n++) {
     const { track } = await E.createRound(hmacHex, 'seed-' + n, 'client', n);
     assert.ok(track.length >= 1 && track.length <= E.MAX_SEGMENTS);
+    assert.ok(track.some((s) => s.bonus > 1), 'en az bir çarpan olmalı');
     let reach = 1, prev = 1;
     for (const seg of track) {
       reach *= seg.survive;
       assert.ok(Math.abs(reach * seg.multiplier - (1 - E.HOUSE_EDGE)) < 1e-9, `tur ${n} seg ${seg.index}`);
-      assert.ok(seg.survive > 0 && seg.survive < 1);
-      assert.ok(seg.multiplier > prev, 'çarpanlar artmalı');
+      assert.ok(seg.survive > 0 && seg.survive <= 1);
+      if (seg.bonus === 1 && seg.index > 1) assert.strictEqual(seg.survive, 1, 'boş kalas risksiz');
+      assert.ok(seg.multiplier >= prev, 'toplam çarpan azalmaz');
       prev = seg.multiplier;
     }
   }
@@ -40,5 +42,6 @@ test('simülasyon: ilk segmentte cash out RTP ≈ %96', async () => {
 
 test('payout ve kademe', () => {
   assert.strictEqual(E.payout(10, 2.333), 23.33);
-  assert.deepStrictEqual([1.5, 3, 7, 15, 60, 250].map(E.tierOf), [0, 1, 2, 3, 4, 5]);
+  assert.deepStrictEqual([1.5, 2, 3, 5, 10, 50].map(E.tierOf), [0, 1, 2, 3, 4, 5]);
+  assert.ok(Math.abs(E.BONUS_TABLE.reduce((a, [, w]) => a + w, 0) - 1) < 1e-9, 'bonus olasılıkları 1 etmeli');
 });
