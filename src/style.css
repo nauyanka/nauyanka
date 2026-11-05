@@ -59,7 +59,7 @@ canvas { width: 100%; height: 100%; display: block; }
 .quick button { background: var(--bg); color: var(--muted); border: 0; border-radius: 999px; padding: 10px 0; font-size: 16px; font-weight: 600; cursor: pointer; }
 .quick button:hover { background: var(--panel-2); color: var(--text); }
 
-.bet-right { display: flex; flex-direction: column; min-width: 0; min-height: 140px; }
+.bet-right { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 140px; }
 .round-actions { display: flex; flex-direction: column; gap: 8px; height: 100%; min-height: 0; }
 .round-actions .btn-main { height: auto; min-height: 0; }
 .btn-main {
@@ -73,10 +73,10 @@ canvas { width: 100%; height: 100%; display: block; }
 .btn-main.bet { background: #58a630; color: #fff; }
 .btn-main.bet:hover:not(:disabled) { filter: brightness(1.08); }
 .btn-main.bet.stop { background: var(--red); }
-.btn-main.step { background: #2f4553; color: var(--text); font-size: 20px; flex: 0 0 52px; }
-.btn-main.step:hover:not(:disabled) { background: #3a566a; }
-.btn-main.cashout { background: var(--gold); color: #3a2a00; flex: 1 1 0; font-size: 24px; }
-.btn-main.cashout small { font-size: 20px; }
+.btn-main.cashout { background: var(--gold); color: #3a2a00; flex: 1 1 0; font-size: 26px; }
+.btn-main.cashout small { font-size: 22px; }
+.btn-main.bet.compact { min-height: 0; flex: 0 0 48px; font-size: 18px; border-radius: 12px; }
+.btn-main.bet.compact small { font-size: 13px; }
 .btn-main.cashout:hover:not(:disabled) { filter: brightness(1.08); }
 
 .auto-row { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; padding: 10px 4px 2px; border-top: 1px solid rgba(255,255,255,.06); }

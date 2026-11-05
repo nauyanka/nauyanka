@@ -42,7 +42,10 @@
     serverSeed: randomSeed(), nonce: 0,
     history: [],
     auto: { running: false, cash: false, target: 1.1 },
+    walkTimer: null,        // bir sonraki kalasa otomatik yürüyüş zamanlayıcısı
   };
+  const PAUSE_AFTER_BONUS = 1500;  // çarpan açıldıktan sonra duraklama (ms) — Bahis Bozdur fırsatı
+  const PAUSE_AFTER_EMPTY = 900;
 
   const segCenter = (i) => START_W + i * SEG_W + SEG_W / 2;   // i: 0 tabanlı kalas indeksi
   // Madalyon durumu kalas başına; sonsuz parkur için lazım oldukça oluşturulur
@@ -97,7 +100,7 @@
   const fmt = (n) => n.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' TRY';
   const ui = {
     balance: $('#balance'), bet: $('#bet'), betLabel: $('#bet-label'), betMinus: $('#bet-minus'), betPlus: $('#bet-plus'),
-    btnBet: $('#btn-bet'), btnStep: $('#btn-step'), btnCash: $('#btn-cashout'), cashAmt: $('#cashout-amount'), roundActions: $('#round-actions'),
+    btnBet: $('#btn-bet'), btnCash: $('#btn-cashout'), cashAmt: $('#cashout-amount'), roundActions: $('#round-actions'),
     tabs: document.querySelectorAll('.tab'), autoRow: $('#auto-row'), autoBet: $('#auto-bet'), autoCash: $('#auto-cash'), autoTarget: $('#auto-target'), autoClear: $('#auto-clear'),
     curMult: $('#cur-mult'), potential: $('#potential'), remaining: $('#remaining'),
     seedHash: $('#seed-hash'), clientSeed: $('#client-seed'), nonce: $('#nonce'), revealed: $('#revealed-seed'),
@@ -119,14 +122,13 @@
     ui.curMult.textContent = currentMultiplier().toFixed(2) + '×';
     ui.potential.textContent = state.playing ? fmt(E.payout(state.bet, currentMultiplier())) : fmt(0);
     ui.remaining.textContent = state.playing ? String(state.position) : '—';
-    const inRound = state.playing && !state.busy;
     const autoRunning = state.auto.running;
     ui.btnBet.hidden = state.playing && !autoRunning;
-    ui.roundActions.hidden = !state.playing || autoRunning;
+    ui.roundActions.hidden = !state.playing;
+    ui.btnBet.classList.toggle('compact', state.playing && autoRunning);
     ui.btnBet.classList.toggle('stop', autoRunning);
     ui.btnBet.innerHTML = autoRunning ? 'Durdur<small>Oto bahis açık</small>' : `Bahis<small><span id="bet-label">${betValue().toFixed(2)}</span> TRY</small>`;
-    ui.btnStep.disabled = !inRound;
-    ui.btnCash.disabled = !inRound || state.position === 0;
+    ui.btnCash.disabled = !state.playing || state.position === 0 || !!anim.fail;
     ui.cashAmt.textContent = state.playing && state.position > 0 ? fmt(E.payout(state.bet, currentMultiplier())) : '—';
     ui.bet.disabled = ui.betMinus.disabled = ui.betPlus.disabled = state.playing;
     document.querySelectorAll('.quick button').forEach((b) => (b.disabled = state.playing));
@@ -177,7 +179,12 @@
     anim.counter = { shown: 1, target: 1 }; anim.celebrate = 0;
     anim.badges = [];
     refreshUI();
-    if (state.auto.running) setTimeout(() => { if (state.playing && !state.busy) step(); }, 400);
+    scheduleStep(500); // bahisten sonra adam kendiliğinden yürür
+  }
+
+  function scheduleStep(ms) {
+    clearTimeout(state.walkTimer);
+    state.walkTimer = setTimeout(() => { if (state.playing && !state.busy) step(); }, ms);
   }
 
   async function step() {
@@ -232,7 +239,9 @@
     if (!state.playing) return;
     state.busy = false; refreshUI();
     if (state.auto.cash && state.position > 0 && currentMultiplier() >= state.auto.target) { cashOut(true); return; }
-    if (state.auto.running) setTimeout(() => { if (state.playing && !state.busy) step(); }, 350);
+    // Her kalasta kısa bir duraklama: oyuncu Bahis Bozdur'a basabilir; sonra adam yoluna devam eder
+    const lastBonus = state.track[state.position - 1]?.bonus ?? 1;
+    scheduleStep(lastBonus > 1 ? PAUSE_AFTER_BONUS : PAUSE_AFTER_EMPTY);
   }
 
   function stopAuto() {
@@ -242,7 +251,11 @@
   }
 
   function cashOut(auto = false) {
-    if (!state.playing || (state.busy && !auto) || state.position === 0) return;
+    // Yürürken de bozdurulabilir: adam durur, o ana kadar AÇILMIŞ çarpan ödenir (açılmamış kalas sayılmaz)
+    if (!state.playing || state.position === 0 || anim.fail) return;
+    if (anim.strike && anim.strike.hit && anim.strike.fail) return; // şimşek çoktan düşürdü
+    clearTimeout(state.walkTimer);
+    anim.walk = null; anim.strike = null;
     const mult = currentMultiplier();
     const win = E.payout(state.bet, mult);
     state.balance += win;
@@ -258,7 +271,7 @@
       toast(`Kalas kırıldı! ${fmt(state.bet)} gitti`, 'lose');
       pushHistory('✕ ' + currentMultiplier().toFixed(2) + '×', false);
     }
-    state.playing = false; state.busy = false;
+    state.playing = false; state.busy = false; clearTimeout(state.walkTimer);
     ui.revealed.textContent = state.serverSeed;
     state.serverSeed = randomSeed(); state.nonce = 0;
     await showSeedHash();
@@ -726,7 +739,7 @@
     ctx.textAlign = 'center';
     if (!state.playing && !anim.fail && anim.celebrate <= 0) {
       ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.font = `bold ${W < 640 ? 13 : 18}px Inter, sans-serif`;
-      ctx.fillText(W < 640 ? 'Bahis yap · yürü · düşmeden para çek' : 'Bahis yap · kalasta yürü · şimşek çarpan getirsin · düşmeden Para Çek', W / 2, W < 640 ? 80 : 60);
+      ctx.fillText(W < 640 ? 'Bahis yap · adam yürüsün · düşmeden bozdur' : 'Bahis yap · adam yürüsün · şimşek çarpan getirsin · düşmeden Bahis Bozdur', W / 2, W < 640 ? 80 : 60);
       return;
     }
     const m = anim.counter.shown, T = TIERS[E.tierOf(Math.max(1, m))];
@@ -778,7 +791,6 @@
 
   // ---------- Olaylar ----------
   ui.btnBet.addEventListener('click', () => { if (state.auto.running) stopAuto(); else startRound(); });
-  ui.btnStep.addEventListener('click', step);
   ui.btnCash.addEventListener('click', () => cashOut(false));
   ui.betMinus.addEventListener('click', () => { const v = betValue(); setBet(v - betStep(v - 0.001)); });
   ui.betPlus.addEventListener('click', () => { const v = betValue(); setBet(v + betStep(v)); });
@@ -795,7 +807,6 @@
     state.auto.running = ui.autoBet.checked;
     refreshUI();
     if (state.auto.running && !state.playing) startRound();
-    else if (state.auto.running && state.playing && !state.busy) step();
   });
   const readTarget = () => { const v = parseFloat(ui.autoTarget.value); state.auto.target = v >= 1.01 ? v : 1.1; };
   ui.autoCash.addEventListener('change', () => { state.auto.cash = ui.autoCash.checked; readTarget(); });
@@ -803,7 +814,7 @@
   ui.autoClear.addEventListener('click', () => { ui.autoTarget.value = '1.10'; readTarget(); });
   window.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT') return;
-    if (e.code === 'Space') { e.preventDefault(); state.playing ? step() : startRound(); }
+    if (e.code === 'Space') { e.preventDefault(); state.playing ? cashOut(false) : startRound(); }
     if (e.key === 'c' || e.key === 'C') cashOut(false);
   });
 

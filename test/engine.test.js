@@ -48,4 +48,5 @@ test('payout, kademe ve bonus tablosu', () => {
   assert.strictEqual(E.payout(10, 2.333), 23.33);
   assert.deepStrictEqual([1.5, 2, 3, 5, 10, 50].map(E.tierOf), [0, 1, 2, 3, 4, 5]);
   assert.ok(Math.abs(E.BONUS_TABLE.reduce((a, [, w]) => a + w, 0) - 1) < 1e-9, 'bonus olasılıkları 1 etmeli');
+  assert.ok(E.BONUS_TABLE[0][1] <= 0.4, 'boş kalas oranı %40ı geçmemeli');
 });

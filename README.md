@@ -15,17 +15,17 @@ Ya da `index.html` dosyasını doğrudan tarayıcıda aç.
 
 | Tuş | İşlev |
 |-----|-------|
-| Boşluk | Bahis yap / Yürü |
-| C | Para çek |
+| Boşluk | Bahis yap / Bahis bozdur |
+| C | Bahis bozdur |
 
 ## Bahis paneli
 
-- **Bahis** sekmesi: −/+ ile tutar (en az 0,20 TRY), 1 / 2 / 5 / 10 hızlı seçim, büyük yeşil **Bahis** butonu. Tur içinde **Yürü** ve **Para Çek** butonları.
-- **Oto** sekmesi: **Oto Bahis** açıkken adam otomatik yürür ve her tur bitince yeni tur başlar (Durdur ile kapanır). **Oto Para Çekme** açıkken toplam çarpan hedefe (örn. 1.10) ulaşınca otomatik para çekilir.
+- **Bahis** sekmesi: −/+ ile tutar (en az 0,20 TRY), 1 / 2 / 5 / 10 hızlı seçim, büyük yeşil **Bahis** butonu. Bahisten sonra adam **kendiliğinden yürür**, her kalasta kısa durur; bu sırada sarı **Bahis Bozdur** butonu açılmış çarpanı öder. Yürürken bozdurursan adam durur ve o ana kadar açılmış çarpan ödenir.
+- **Oto** sekmesi: **Oto Bahis** açıkken her tur bitince yeni tur başlar (Durdur ile kapanır). **Oto Para Çekme** açıkken toplam çarpan hedefe (örn. 1.10) ulaşınca otomatik para çekilir.
 
 ## Mekanik
 
-- Kalas **sonsuzdur**: adam istediği kadar yürür, ya cash out yapar ya düşer (5000× toplamda otomatik ödeme). Kalasların %60'ı **boş** geçilir; kalanında çarpan düşer: genelde 1.5×–2×, sık sık 3×–4×, nadiren 5×/10×/20×, çok nadiren 50×. Toplam çarpan düşen çarpanların **çarpımı**dır (1.5× · 2× = 3×).
+- Kalas **sonsuzdur**: adam istediği kadar yürür, ya cash out yapar ya düşer (5000× toplamda otomatik ödeme). Kalasların %35'i **boş** geçilir; kalanında çarpan düşer: genelde 1.5×–2×, sık sık 3×–4×, nadiren 5×/10×/20×, çok nadiren 50×. Toplam çarpan düşen çarpanların **çarpımı**dır (1.5× · 2× = 3×).
 - Çarpanlar **gizlidir**; her kalasın üstünde "?" madalyonu durur. Adam kalasa basınca kısa bir gerilim olur: ya "?" sönüp **BOŞ** geçilir, ya gökten **şimşek** çakıp çarpan kanatlı madalyon halinde düşer, ya da şimşek kalası vurur, altındaki tahtalar kırılır, adam düşer ve bahis gider.
 - Madalyon rengi çarpana göre: 1.5× yeşil, 2× mavi, 3×–4× mor, 5× ateş, 10×–20× altın, 50× elmas.
 - Boş kalaslar risksizdir; risk çarpan düşen kalaslarda toplanır (büyük çarpan = o kalasta büyük düşme ihtimali).

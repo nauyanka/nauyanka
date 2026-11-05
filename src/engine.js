@@ -15,12 +15,12 @@ const MAX_MULTIPLIER = 5000;   // bu toplama ulaşınca tur otomatik ödenir
 
 /**
  * Kalas bonusu tablosu: [değer, olasılık].
- * 1 = boş kalas. Çoğu kalas boş geçilir; çıkan çarpanlar genelde 1.5×–4×,
+ * 1 = boş kalas (%35). Çıkan çarpanlar genelde 1.5×–4×,
  * nadiren 10×/20×, çok nadiren 50×.
  */
 const BONUS_TABLE = [
-  [1, 0.60], [1.5, 0.16], [2, 0.12], [3, 0.06], [4, 0.03],
-  [5, 0.015], [10, 0.008], [20, 0.005], [50, 0.002],
+  [1, 0.35], [1.5, 0.26], [2, 0.195], [3, 0.098], [4, 0.049],
+  [5, 0.024], [10, 0.013], [20, 0.008], [50, 0.003],
 ];
 function pickBonus(r) {
   let acc = 0;
