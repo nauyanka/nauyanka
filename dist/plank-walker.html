@@ -341,6 +341,7 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
     wx: START_W / 2, wy: 0,
     walk: null,            // { from, to, t, dur, onDone }
     phase: 0,              // yürüme döngüsü fazı
+    walkBlend: 0,          // 0 = duruyor, 1 = yürüyor
     strike: null,          // { seg, t, x, fail }
     bolt: null,            // { pts, branches, t }
     flash: 0,
@@ -605,15 +606,17 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
   // ---------- Güncelleme ----------
   function update(dt) {
     anim.time += dt;
+    // yürüyüş → duruş geçişi
+    anim.walkBlend += ((anim.walk ? 1 : 0) - anim.walkBlend) * Math.min(1, dt * 9);
     // yürüyüş
     if (anim.walk) {
       const w = anim.walk; w.t += dt;
       const p = Math.min(1, w.t / w.dur);
       anim.wx = w.from + (w.to - w.from) * p;
-      anim.phase += dt * (WALK_SPEED / 11);
+      anim.phase += dt * (WALK_SPEED / 15.5); // adım uzunluğu ≈ 47px → faz hızı yere uyar
       if (p >= 1) { const cb = w.onDone; anim.walk = null; cb(); }
     } else {
-      anim.phase += (Math.round(anim.phase / Math.PI) * Math.PI - anim.phase) * Math.min(1, dt * 10); // ayakları topla
+      // dururken bacaklar toplanır (walkBlend → 0)
     }
     // şimşek gerilimi → çarpma
     if (anim.strike) {
@@ -861,222 +864,143 @@ if (typeof window !== 'undefined') window.PlankEngine = api;
     ctx.restore();
   }
 
-  // ---------- Çizim: karakter (dağcı) ----------
-  const C = {
-    skin: '#f0c49a', skinD: '#d19a6c', beard: '#4a2e1a',
-    jacket: '#e8402f', jacketD: '#b32a1e', jacketL: '#ff6a52',
-    pants: '#4b5563', pantsD: '#343c48', kneepad: '#23282f',
-    boot: '#6b3f1d', bootD: '#45270f', sole: '#1e1e22', lace: '#e0b23a',
-    glove: '#1d1f26', helmet: '#ff9f1a', helmetD: '#c9720a', lamp: '#8fe9ff',
-    pack: '#2b4c7e', packD: '#1b3157', rope: '#d9b36b', outline: '#141418',
-  };
-  const WALKER_SCALE = 1.2;
+  // ---------- Çizim: karakter (çubuk adam, biyomekanik yürüyüş) ----------
+  // Uzuv boyları (px, karakter ölçeği öncesi). Ayaklar yerde y=0.
+  const S = { thigh: 27, shin: 27, foot: 11, torso: 36, neck: 7, head: 10.5, upperArm: 20, foreArm: 18, pelvis: 5, shoulder: 7 };
+  const WALKER_SCALE = 1.15;
+  const STICK = { line: '#f3f6fb', outline: '#0b1118', width: 5.5 };
 
-  // Dış çizgili uzuv: önce koyu kontur, sonra renk
-  function limb(pts, width, color) {
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    for (const [w, c] of [[width + 3.5, C.outline], [width, color]]) {
-      ctx.strokeStyle = c; ctx.lineWidth = w;
-      ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
-      for (const p of pts.slice(1)) ctx.lineTo(p[0], p[1]);
-      ctx.stroke();
+  /**
+   * Yürüme döngüsü: φ ∈ [0, 2π) sol bacağın bir adım döngüsü (0 = topuk vuruşu, π = parmak ucu itişi).
+   * Sağ bacak π kaymalı. Açılar radyan; kalça/kol: dikeyden öne doğru pozitif; diz/dirsek: bükülme.
+   */
+  function gaitLeg(φ) {
+    φ = ((φ % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    const stance = φ < Math.PI;
+    const hip = 0.40 * Math.cos(φ) - 0.05;
+    const knee = stance
+      ? 0.12 * Math.sin(2 * φ) ** 2 + 0.45 * Math.max(0, Math.sin(φ - Math.PI / 2)) ** 2   // yük kabulü + itiş öncesi
+      : 0.45 * Math.cos((φ - Math.PI) / 2) ** 2 + 1.0 * Math.sin(φ - Math.PI);              // salınımda yüksek bükülme
+    const pitch = stance ? -0.28 * Math.cos(φ) : 0.15 * Math.sin(φ - Math.PI) - 0.1;        // topuk vuruşu / parmak itişi
+    return { hip, knee, pitch };
+  }
+  function gaitArm(φ) {
+    // Kol aynı taraftaki bacağın tersine salınır; öndeyken dirsek daha bükük
+    const a = -0.42 * Math.cos(φ);
+    const bend = 0.35 + 0.45 * (1 - Math.cos(φ)) / 2;
+    return { a, bend };
+  }
+
+  const STAND = { legL: { hip: 0.02, knee: 0.02, pitch: 0 }, legR: { hip: -0.02, knee: 0.02, pitch: 0 }, armL: { a: 0.08, bend: 0.25 }, armR: { a: -0.08, bend: 0.25 }, lean: 0, head: 0 };
+  const mix = (a, b, t) => a + (b - a) * t;
+  const mixObj = (A, B, t) => Object.fromEntries(Object.keys(A).map((k) => [k, typeof A[k] === 'object' ? mixObj(A[k], B[k], t) : mix(A[k], B[k], t)]));
+
+  function buildPose() {
+    const walking = !!anim.walk, f = anim.fail, t = anim.time;
+    const tension = anim.strike && !anim.strike.hit ? Math.min(1, anim.strike.t / 0.75) : 0;
+    const cheer = anim.celebrate > 0 ? Math.min(1, anim.celebrate / 0.25) : 0;
+    const φ = anim.phase;
+    const walk = { legL: gaitLeg(φ), legR: gaitLeg(φ + Math.PI), armL: gaitArm(φ), armR: gaitArm(φ + Math.PI), lean: 0.07, head: 0.02 };
+    let pose = mixObj(STAND, walk, anim.walkBlend);
+    let rot = 0, alpha = 1, lift = 0;
+
+    if (f) {
+      const k = Math.min(1, f.t / 0.5);
+      pose = {
+        legL: { hip: 0.9 * k + Math.sin(f.t * 14) * 0.2, knee: 0.8, pitch: 0.3 },
+        legR: { hip: -0.4 * k + Math.sin(f.t * 14 + 1) * 0.2, knee: 0.5, pitch: 0.2 },
+        armL: { a: 2.6 + Math.sin(f.t * 18) * 0.3, bend: 0.2 }, armR: { a: 2.4 - Math.sin(f.t * 18) * 0.3, bend: 0.2 },
+        lean: 0.2, head: -0.3,
+      };
+      rot = Math.sin(f.t * 5) * 0.3;
+      alpha = Math.max(0, 1 - Math.max(0, f.t - 0.8) * 1.5);
+    } else if (cheer > 0 && !walking) {
+      const hop = Math.abs(Math.sin(t * 9));
+      pose = mixObj(pose, {
+        legL: { hip: 0.15, knee: 0.25 - hop * 0.2, pitch: 0 }, legR: { hip: -0.15, knee: 0.25 - hop * 0.2, pitch: 0 },
+        armL: { a: 2.9 + Math.sin(t * 12) * 0.15, bend: -0.4 }, armR: { a: 2.9 - Math.sin(t * 12) * 0.15, bend: -0.4 },
+        lean: -0.05, head: -0.12,
+      }, cheer);
+      lift = hop * 6 * cheer;
+    } else if (tension > 0 && !walking) {
+      // Yukarı bakar, sağ elini alnına siper eder, hafif titrer
+      pose = mixObj(pose, {
+        legL: { hip: 0.05, knee: 0.05, pitch: 0 }, legR: { hip: -0.08, knee: 0.08, pitch: 0 },
+        armL: { a: 0.15, bend: 0.3 }, armR: { a: 2.45, bend: -1.9 }, lean: -0.08, head: -0.45,
+      }, tension);
+      lift = Math.sin(t * 24) * tension * 0.6;
+    } else if (!walking) {
+      // Boşta: hafif nefes salınımı
+      pose.armL.a += Math.sin(t * 2) * 0.03; pose.armR.a -= Math.sin(t * 2) * 0.03;
+      lift = Math.sin(t * 2) * 0.6;
     }
-  }
-  function outlinedShape(draw, fill, lw = 2) {
-    ctx.beginPath(); draw();
-    ctx.fillStyle = fill; ctx.fill();
-    ctx.lineWidth = lw; ctx.strokeStyle = C.outline; ctx.stroke();
+    return { pose, rot, alpha, lift };
   }
 
-  function drawBoot(fx, fy, angle, dark) {
-    ctx.save(); ctx.translate(fx, fy); ctx.rotate(angle);
-    outlinedShape(() => {
-      ctx.moveTo(-9, -9); ctx.lineTo(7, -9); ctx.quadraticCurveTo(14, -8, 15, -1); ctx.lineTo(15, 3); ctx.lineTo(-9, 3); ctx.closePath();
-    }, dark ? C.bootD : C.boot);
-    ctx.fillStyle = C.sole; ctx.fillRect(-10, 2, 26, 4);
-    ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fillRect(-7, -8, 12, 2);
-    // bağcıklar
-    ctx.strokeStyle = C.lace; ctx.lineWidth = 1.3;
-    for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.moveTo(-5 + k * 4, -7); ctx.lineTo(-1 + k * 4, -3); ctx.moveTo(-1 + k * 4, -7); ctx.lineTo(-5 + k * 4, -3); ctx.stroke(); }
-    ctx.restore();
+  // İleri kinematik: bacak (kalça → diz → bilek → topuk/parmak)
+  function legPoints(px, py, L) {
+    const kx = px + Math.sin(L.hip) * S.thigh, ky = py + Math.cos(L.hip) * S.thigh;
+    const a2 = L.hip - L.knee;
+    const ax = kx + Math.sin(a2) * S.shin, ay = ky + Math.cos(a2) * S.shin;
+    const heel = [ax - Math.cos(L.pitch) * 3, ay - Math.sin(L.pitch) * 3 + 2];
+    const toe = [ax + Math.cos(L.pitch) * S.foot, ay + Math.sin(L.pitch) * S.foot + 2];
+    return { knee: [kx, ky], ankle: [ax, ay], heel, toe };
+  }
+  function armPoints(sx0, sy0, A) {
+    const ex = sx0 + Math.sin(A.a) * S.upperArm, ey = sy0 + Math.cos(A.a) * S.upperArm;
+    const a2 = A.a + A.bend;
+    return { elbow: [ex, ey], hand: [ex + Math.sin(a2) * S.foreArm, ey + Math.cos(a2) * S.foreArm] };
   }
 
-  function drawLeg(hx, thigh, knee, back) {
-    const HIP = -50, L1 = 25, L2 = 25;
-    const kx = hx + Math.sin(thigh) * L1, ky = HIP + Math.cos(thigh) * L1;
-    const a2 = thigh - knee;
-    const fx = kx + Math.sin(a2) * L2, fy = ky + Math.cos(a2) * L2;
-    limb([[hx, HIP], [kx, ky]], 14, back ? C.pantsD : C.pants);
-    limb([[kx, ky], [fx, fy]], 12, back ? C.pantsD : C.pants);
-    // dizlik
-    ctx.fillStyle = C.kneepad; ctx.beginPath(); ctx.ellipse(kx + Math.sin(a2) * 3, ky + Math.cos(a2) * 3, 6, 7, a2, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,.15)'; ctx.lineWidth = 1; ctx.stroke();
-    drawBoot(fx, fy, -a2 * 0.35, back);
-    return [fx, fy];
-  }
-
-  function drawArm(shx, a, elbow, back) {
-    const shy = -86;
-    const ex = shx + Math.sin(a) * 19, ey = shy + Math.cos(a) * 19;
-    const a2 = a + elbow;
-    const hx = ex + Math.sin(a2) * 17, hy = ey + Math.cos(a2) * 17;
-    limb([[shx, shy], [ex, ey]], 12, back ? C.jacketD : C.jacket);
-    limb([[ex, ey], [hx, hy]], 11, back ? C.jacketD : C.jacket);
-    // manşet + eldiven
-    ctx.strokeStyle = back ? '#7a1c13' : C.jacketD; ctx.lineWidth = 11; ctx.beginPath(); ctx.moveTo(hx - Math.sin(a2) * 7, hy - Math.cos(a2) * 7); ctx.lineTo(hx - Math.sin(a2) * 3, hy - Math.cos(a2) * 3); ctx.stroke();
-    outlinedShape(() => ctx.arc(hx, hy, 6, 0, Math.PI * 2), C.glove, 1.6);
-    return [hx, hy, a2];
-  }
-
-  function drawBackpack(bounce) {
-    ctx.save(); ctx.translate(0, bounce);
-    // halat bobini
-    ctx.strokeStyle = C.rope; ctx.lineWidth = 2.2;
-    for (let k = 0; k < 4; k++) { ctx.beginPath(); ctx.ellipse(-20, -99 + k * 1.5, 10 - k * 0.8, 6, 0.2, 0, Math.PI * 2); ctx.stroke(); }
-    ctx.strokeStyle = '#8a6a30'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(-20, -97, 10, 6, 0.2, 0, Math.PI * 2); ctx.stroke();
-    // çanta gövdesi
-    outlinedShape(() => ctx.roundRect(-31, -96, 22, 44, 7), C.pack);
-    ctx.fillStyle = C.packD; ctx.beginPath(); ctx.roundRect(-30, -70, 20, 16, 5); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fillRect(-29, -94, 6, 38);
-    // toka ve kayış
-    ctx.fillStyle = '#c9ced6'; ctx.fillRect(-25, -80, 8, 3);
-    ctx.restore();
-  }
-
-  function drawTorso(lean) {
-    ctx.save(); ctx.rotate(lean);
-    const g = ctx.createLinearGradient(-17, 0, 17, 0);
-    g.addColorStop(0, C.jacketD); g.addColorStop(0.45, C.jacket); g.addColorStop(1, C.jacketL);
-    outlinedShape(() => { ctx.moveTo(-17, -94); ctx.lineTo(17, -94); ctx.quadraticCurveTo(19, -70, 16, -48); ctx.lineTo(-16, -48); ctx.quadraticCurveTo(-19, -70, -17, -94); ctx.closePath(); }, g);
-    // kapitone çizgileri
-    ctx.strokeStyle = 'rgba(0,0,0,.22)'; ctx.lineWidth = 1.2;
-    for (let y = -84; y < -52; y += 9) { ctx.beginPath(); ctx.moveTo(-15, y); ctx.quadraticCurveTo(0, y + 2, 15, y); ctx.stroke(); }
-    // fermuar
-    ctx.strokeStyle = '#d7dbe3'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(2, -93); ctx.lineTo(2, -52); ctx.stroke();
-    ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(2, -93); ctx.lineTo(2, -52); ctx.stroke();
-    // göğüs cebi
-    ctx.fillStyle = C.jacketD; ctx.beginPath(); ctx.roundRect(5, -80, 9, 7, 2); ctx.fill();
-    // omuz kayışları (çanta)
-    ctx.strokeStyle = C.packD; ctx.lineWidth = 5; ctx.lineCap = 'butt';
-    ctx.beginPath(); ctx.moveTo(-9, -94); ctx.lineTo(-7, -56); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(9, -94); ctx.lineTo(7, -56); ctx.stroke();
-    ctx.lineCap = 'round';
-    // yaka
-    outlinedShape(() => { ctx.moveTo(-13, -94); ctx.lineTo(13, -94); ctx.lineTo(8, -100); ctx.lineTo(-8, -100); ctx.closePath(); }, C.jacketD, 1.6);
-    // emniyet kemeri + toka + karabina
-    ctx.fillStyle = '#1b1b22'; ctx.fillRect(-17, -56, 34, 6);
-    ctx.fillStyle = '#c9ced6'; ctx.fillRect(-3, -57, 8, 8); ctx.fillStyle = '#1b1b22'; ctx.fillRect(-1, -55, 4, 4);
-    ctx.strokeStyle = '#d0d6e0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(12, -46, 3.5, 5.5, 0.2, 0, Math.PI * 2); ctx.stroke();
-    ctx.strokeStyle = '#8fe9ff'; ctx.beginPath(); ctx.ellipse(-12, -45, 3.5, 5.5, -0.2, 0, Math.PI * 2); ctx.stroke();
-    ctx.restore();
-  }
-
-  function drawHead(tilt, mood) {
-    ctx.save(); ctx.translate(0, -96); ctx.rotate(tilt);
-    // boyun
-    ctx.fillStyle = C.skinD; ctx.fillRect(-5, -6, 10, 10);
-    // kafa
-    outlinedShape(() => ctx.ellipse(1, -18, 14, 16, 0, 0, Math.PI * 2), C.skin, 1.8);
-    // sakal
-    ctx.save(); ctx.beginPath(); ctx.ellipse(1, -18, 13, 15, 0, 0, Math.PI * 2); ctx.clip();
-    ctx.fillStyle = C.beard; ctx.beginPath(); ctx.ellipse(0, -8, 15, 10, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = C.skin; ctx.beginPath(); ctx.ellipse(6, -11, 5, 2.4, 0, 0, Math.PI * 2); ctx.fill(); // ağız çevresi
-    ctx.restore();
-    // ağız
-    ctx.strokeStyle = '#8a3a30'; ctx.lineWidth = 1.6; ctx.beginPath();
-    if (mood === 'scared') ctx.ellipse(7, -10, 2.5, 3, 0, 0, Math.PI * 2);
-    else if (mood === 'cheer') ctx.arc(6, -12, 4.5, 0.15, Math.PI - 0.2);
-    else ctx.arc(7, -12, 3, 0.3, Math.PI - 0.5);
+  function strokePath(pts, width, color) {
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+    for (const p of pts.slice(1)) ctx.lineTo(p[0], p[1]);
     ctx.stroke();
-    // burun, göz, kaş
-    ctx.strokeStyle = C.skinD; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(10, -22); ctx.quadraticCurveTo(14, -17, 10, -16); ctx.stroke();
-    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(7, -22, 3.4, 2.8, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#2a2f3a'; ctx.beginPath(); ctx.arc(8, -22, 1.8, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(8.7, -22.7, 0.6, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = C.beard; ctx.lineWidth = 2; ctx.beginPath();
-    if (mood === 'scared') { ctx.moveTo(3, -28); ctx.lineTo(11, -26); } else { ctx.moveTo(3, -27); ctx.lineTo(11, -27.5); }
-    ctx.stroke();
-    // kulak
-    ctx.fillStyle = C.skinD; ctx.beginPath(); ctx.ellipse(-11, -19, 3, 4, 0, 0, Math.PI * 2); ctx.fill();
-    // çene kayışı
-    ctx.strokeStyle = '#2a2a30'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(-10, -26); ctx.quadraticCurveTo(-8, -10, 2, -6); ctx.stroke();
-    // kask
-    const hg = ctx.createLinearGradient(-14, -38, 14, -24);
-    hg.addColorStop(0, C.helmetD); hg.addColorStop(0.5, C.helmet); hg.addColorStop(1, '#ffc46b');
-    outlinedShape(() => { ctx.moveTo(-15, -26); ctx.quadraticCurveTo(-16, -44, 1, -46); ctx.quadraticCurveTo(18, -44, 16, -26); ctx.quadraticCurveTo(10, -29, 1, -29); ctx.quadraticCurveTo(-8, -29, -15, -26); ctx.closePath(); }, hg, 1.8);
-    ctx.fillStyle = 'rgba(0,0,0,.35)';
-    for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.roundRect(-8 + k * 6, -41, 3, 6, 1.5); ctx.fill(); }
-    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.ellipse(-4, -41, 6, 2, -0.3, 0, Math.PI * 2); ctx.fill();
-    // kafa lambası
-    ctx.fillStyle = '#1b1b22'; ctx.beginPath(); ctx.roundRect(-15, -34, 31, 4, 2); ctx.fill();
-    outlinedShape(() => ctx.roundRect(9, -37, 9, 8, 2), '#2a2d36', 1.4);
-    ctx.fillStyle = C.lamp; ctx.beginPath(); ctx.roundRect(11, -35.5, 5, 5, 1.5); ctx.fill();
-    ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    const lg = ctx.createRadialGradient(14, -33, 1, 14, -33, 14);
-    lg.addColorStop(0, 'rgba(143,233,255,.55)'); lg.addColorStop(1, 'rgba(143,233,255,0)');
-    ctx.fillStyle = lg; ctx.beginPath(); ctx.arc(14, -33, 14, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-    ctx.restore();
-  }
-
-  function drawPole(hx, hy, ang) {
-    const L = 64;
-    const tx = hx + Math.sin(ang) * L, ty = hy + Math.cos(ang) * L;
-    limb([[hx - Math.sin(ang) * 10, hy - Math.cos(ang) * 10], [tx, ty]], 3.5, '#9aa3ad');
-    ctx.strokeStyle = '#1b1b22'; ctx.lineWidth = 6; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(hx - Math.sin(ang) * 10, hy - Math.cos(ang) * 10); ctx.lineTo(hx + Math.sin(ang) * 6, hy + Math.cos(ang) * 6); ctx.stroke();
-    ctx.fillStyle = '#2a2d36'; ctx.beginPath(); ctx.arc(tx - Math.sin(ang) * 6, ty - Math.cos(ang) * 6, 4, 0, Math.PI * 2); ctx.fill();
   }
 
   function drawWalker() {
-    const walking = !!anim.walk, f = anim.fail;
+    const { pose, rot, alpha, lift } = buildPose();
     const x = sx(anim.wx), y = sy(anim.wy);
-    const φ = anim.phase;
-    const tension = anim.strike && !anim.strike.hit ? Math.min(1, anim.strike.t / 0.75) : 0;
-    const cheer = anim.celebrate > 0 ? Math.min(1, anim.celebrate / 0.25) : 0;
 
-    // Poz
-    let thighL = 0, thighR = 0, kneeL = 0, kneeR = 0, armL = 0.15, armR = -0.15, elbowL = 0.4, elbowR = 0.4;
-    let bob = 0, lean = 0, rot = 0, alpha = 1, headTilt = 0, mood = 'calm', poleAng = 0.3, showPole = true;
-    if (walking) {
-      thighL = 0.5 * Math.sin(φ); thighR = -thighL;
-      kneeL = 1.0 * Math.max(0, Math.cos(φ)) * (Math.sin(φ) > -0.2 ? 1 : 0.3);
-      kneeR = 1.0 * Math.max(0, -Math.cos(φ)) * (-Math.sin(φ) > -0.2 ? 1 : 0.3);
-      armL = -0.45 * Math.sin(φ); armR = 0.25 + 0.4 * Math.sin(φ);
-      elbowL = 0.55; elbowR = 0.95;
-      bob = -Math.abs(Math.cos(φ)) * 3; lean = 0.08;
-      poleAng = 0.45 + 0.35 * Math.sin(φ);
-    } else if (f) {
-      mood = 'scared'; showPole = false;
-      rot = Math.sin(f.t * 5) * 0.25;
-      thighL = 0.5; thighR = -0.3; kneeL = 0.9; kneeR = 0.4;
-      armL = -2.7 + Math.sin(f.t * 16) * 0.5; armR = -2.5 - Math.sin(f.t * 16) * 0.5; elbowL = elbowR = 0.3;
-      alpha = Math.max(0, 1 - Math.max(0, f.t - 0.8) * 1.5);
-    } else if (cheer > 0) {
-      mood = 'cheer'; showPole = false;
-      armL = -2.9 + Math.sin(anim.time * 12) * 0.15; armR = -2.9 - Math.sin(anim.time * 12) * 0.15; elbowL = elbowR = -0.5;
-      bob = -Math.abs(Math.sin(anim.time * 10)) * 5 * cheer; headTilt = -0.1;
-    } else if (tension > 0) {
-      // Şimşek beklerken yukarı bakar, elini gözüne siper eder
-      armR = -2.4; elbowR = -1.65; armL = 0.2; headTilt = -0.35 * tension; bob = Math.sin(anim.time * 20) * tension * 0.8;
-      showPole = false; mood = tension > 0.6 ? 'scared' : 'calm';
-    } else {
-      bob = Math.sin(anim.time * 2.2) * 1.2;
-      armL = 0.15 + Math.sin(anim.time * 2.2) * 0.04; armR = 0.25 - Math.sin(anim.time * 2.2) * 0.04; elbowR = 0.8;
-    }
+    // Pelvis yüksekliğini, yere basan (en alçak) ayağa göre ayarla → doğal yükselip alçalma, kayma yok
+    const pelvisY0 = -(S.thigh + S.shin + 2);
+    const lL = legPoints(-S.pelvis / 2, pelvisY0, pose.legL), lR = legPoints(S.pelvis / 2, pelvisY0, pose.legR);
+    const lowest = Math.max(lL.heel[1], lL.toe[1], lR.heel[1], lR.toe[1]);
+    const dy = anim.fail ? 0 : -lowest;
+    const pelvisY = pelvisY0 + dy - lift;
+    const legL = legPoints(-S.pelvis / 2, pelvisY, pose.legL), legR = legPoints(S.pelvis / 2, pelvisY, pose.legR);
+
+    // Gövde, omuz, baş
+    const shX = Math.sin(pose.lean) * S.torso, shY = pelvisY - Math.cos(pose.lean) * S.torso;
+    const neckX = shX + Math.sin(pose.lean + pose.head) * S.neck, neckY = shY - Math.cos(pose.lean + pose.head) * S.neck;
+    const headX = neckX + Math.sin(pose.lean + pose.head) * S.head, headY = neckY - Math.cos(pose.lean + pose.head) * S.head;
+    const armL = armPoints(shX - S.shoulder / 2, shY, pose.armL), armR = armPoints(shX + S.shoulder / 2, shY, pose.armR);
 
     ctx.save(); ctx.globalAlpha = alpha;
-    if (!f) { ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.beginPath(); ctx.ellipse(x, sy(0) + 2, 22, 6, 0, 0, Math.PI * 2); ctx.fill(); }
-    ctx.translate(x, y); ctx.scale(WALKER_SCALE, WALKER_SCALE); ctx.translate(0, bob); ctx.rotate(rot);
+    if (!anim.fail) { ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.beginPath(); ctx.ellipse(x, sy(0) + 2, 16, 4.5, 0, 0, Math.PI * 2); ctx.fill(); }
+    ctx.translate(x, y); ctx.scale(WALKER_SCALE, WALKER_SCALE); ctx.rotate(rot);
 
-    drawBackpack(walking ? Math.abs(Math.cos(φ)) * 1.5 : 0);
-    drawLeg(-5, thighL, kneeL, true);
-    drawArm(-12, armL, elbowL, true);
-    drawTorso(lean);
-    drawLeg(5, thighR, kneeR, false);
-    drawHead(headTilt, mood);
-    const [hx, hy] = drawArm(12, armR, elbowR, false);
-    if (showPole) drawPole(hx, hy, poleAng);
+    const segs = [
+      [[-S.pelvis / 2, pelvisY], ...Object.values({ k: legL.knee, a: legL.ankle }), legL.heel], [legL.ankle, legL.toe],
+      [[S.pelvis / 2, pelvisY], legR.knee, legR.ankle, legR.heel], [legR.ankle, legR.toe],
+      [[-S.pelvis / 2, pelvisY], [S.pelvis / 2, pelvisY]],
+      [[0, pelvisY], [shX, shY]],
+      [[shX - S.shoulder / 2, shY], [shX + S.shoulder / 2, shY]],
+      [[shX - S.shoulder / 2, shY], armL.elbow, armL.hand],
+      [[shX + S.shoulder / 2, shY], armR.elbow, armR.hand],
+      [[shX, shY], [neckX, neckY]],
+    ];
+    // Arka uzuvlar (sol) biraz koyu, ön uzuvlar (sağ) parlak: derinlik hissi
+    const back = new Set([0, 1, 7]);
+    for (const [i, p] of segs.entries()) strokePath(p, STICK.width + 4, STICK.outline);
+    ctx.beginPath(); ctx.arc(headX, headY, S.head + 2, 0, Math.PI * 2); ctx.fillStyle = STICK.outline; ctx.fill();
+    for (const [i, p] of segs.entries()) strokePath(p, STICK.width, back.has(i) ? '#c3cbd8' : STICK.line);
+    ctx.beginPath(); ctx.arc(headX, headY, S.head, 0, Math.PI * 2); ctx.fillStyle = STICK.line; ctx.fill();
+    // Eklem noktaları
+    ctx.fillStyle = STICK.line;
+    for (const j of [legL.knee, legR.knee, armL.elbow, armR.elbow]) { ctx.beginPath(); ctx.arc(j[0], j[1], STICK.width / 2 + 0.6, 0, Math.PI * 2); ctx.fill(); }
     ctx.restore();
   }
 

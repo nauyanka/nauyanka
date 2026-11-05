@@ -35,6 +35,6 @@ Ya da `index.html` dosyasını doğrudan tarayıcıda aç.
 ## Dosyalar
 
 - `src/engine.js` — saf oyun mantığı (tarayıcı + Node)
-- `src/game.js` — canvas çizimi, animasyon, UI
+- `src/game.js` — canvas çizimi, biyomekanik yürüyüşlü çubuk adam, animasyon, UI
 - `test/engine.test.js` — RTP ve determinizm testleri
 - `scripts/build.js` — tek dosyalık `dist/plank-walker.html` üretir
